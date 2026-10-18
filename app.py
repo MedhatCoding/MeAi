@@ -7,7 +7,8 @@ import requests
 import streamlit as st
 
 APP_DIR = Path(__file__).parent
-DB = APP_DIR / "assistant_memory.db"
+# Streamlit Cloud may mount the repository as read-only; keep the temporary SQLite DB writable.
+DB = Path(os.getenv("MEDHAT_AI_DB_PATH", "/tmp/assistant_memory.db"))
 
 st.set_page_config(page_title="Medhat AI", page_icon="✦", layout="wide")
 
