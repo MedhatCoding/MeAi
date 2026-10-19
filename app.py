@@ -14,16 +14,46 @@ st.set_page_config(page_title="Medhat AI", page_icon="✦", layout="wide")
 
 st.markdown("""
 <style>
+/* Keep Streamlit's responsive layout intact; apply RTL only to text. */
 html, body { direction: rtl; }
 [data-testid="stAppViewContainer"] { direction: rtl; }
-[data-testid="stMarkdownContainer"],
-[data-testid="stChatMessage"],
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
-    direction: rtl;
-    text-align: right;
+[data-testid="stMain"] *,
+[data-testid="stSidebar"] * {
+    writing-mode: horizontal-tb !important;
+    word-break: normal !important;
 }
-.block-container { width: 100%; max-width: 1000px; padding-top: 1rem; }
-.hero { width: 100%; box-sizing: border-box; padding: 1.2rem; border: 1px solid rgba(128,128,128,.25); border-radius: 18px; margin-bottom: 1rem; }
+[data-testid="stMarkdownContainer"] {
+    direction: rtl !important;
+    text-align: right !important;
+    width: 100%;
+    min-width: 0;
+    white-space: normal !important;
+    overflow-wrap: break-word !important;
+}
+[data-testid="stChatMessage"] {
+    width: 100%;
+    min-width: 0;
+}
+.block-container {
+    width: 100%;
+    max-width: 1000px;
+    min-width: 0;
+    padding: 1rem max(1rem, env(safe-area-inset-left)) 5rem max(1rem, env(safe-area-inset-right));
+}
+.hero {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 1.2rem;
+    border: 1px solid rgba(128,128,128,.25);
+    border-radius: 18px;
+    margin-bottom: 1rem;
+}
+@media (max-width: 700px) {
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .6rem !important; }
+    [data-testid="column"] { min-width: 100% !important; width: 100% !important; flex: 1 1 100% !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
