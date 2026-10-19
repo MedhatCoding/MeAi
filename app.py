@@ -134,11 +134,19 @@ def call_model(messages):
     return res.json()["choices"][0]["message"]["content"]
 
 db_init()
-with st.sidebar:
-    st.title("✦ Medhat AI")
-    page = st.radio("القائمة", ["المحادثة", "الذاكرة", "الإعدادات"])
-    st.caption("نسخة أولية قابلة للتطوير")
-    st.write("حالة المفتاح:", "مُعدّ ✅" if secret("AI_API_KEY") else "غير مُعدّ ⚠️")
+
+# Keep navigation in the main page instead of the sidebar. On narrow mobile
+# viewports the sidebar's responsive layout was collapsing its text into a thin column.
+st.markdown("## ✦ Medhat AI")
+page = st.radio(
+    "القائمة",
+    ["المحادثة", "الذاكرة", "الإعدادات"],
+    horizontal=True,
+    label_visibility="collapsed",
+)
+st.caption("نسخة أولية قابلة للتطوير")
+st.caption("حالة المفتاح: " + ("مُعدّ ✅" if secret("AI_API_KEY") else "غير مُعدّ ⚠️"))
+st.divider()
 
 if page == "المحادثة":
     st.markdown('<div class="hero"><h1>أهلاً بيك 👋</h1><p>اسأل بالعربي، ارفع ملفًا، واطلب شرحًا خطوة بخطوة.</p></div>', unsafe_allow_html=True)
