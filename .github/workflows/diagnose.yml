@@ -34,20 +34,16 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q app.py
 
-      - name: Start Streamlit and capture startup logs
-        shell: bash
+      - name: Execute app script with Streamlit AppTest
+        env:
+          AI_API_KEY: ""
         run: |
-          set +e
-          timeout 25s streamlit run app.py --server.headless true --server.port 8501 --server.address 127.0.0.1 > streamlit-startup.log 2>&1
-          status=$?
-          cat streamlit-startup.log
-          if grep -Eqi "Traceback|ModuleNotFoundError|ImportError|SyntaxError|Error running app" streamlit-startup.log; then
-            echo "Streamlit startup log contains an error."
-            exit 1
-          fi
-          if grep -q "You can now view your Streamlit app" streamlit-startup.log; then
-            echo "Streamlit server started successfully; timeout is expected for this smoke test."
-            exit 0
-          fi
-          echo "Streamlit did not reach its ready message (exit status: $status)."
-          exit 1
+          python - <<'PY'
+          from streamlit.testing.v1 import AppTest
+          app = AppTest.from_file("app.py", default_timeout=30).run()
+          for error in app.exception:
+              print("APP_EXCEPTION:", error.message)
+          if app.exception:
+              raise SystemExit("Streamlit app raised an exception during initial render.")
+          print("PASS: app.py completed its initial render without uncaught exceptions.")
+          PY
