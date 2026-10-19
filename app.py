@@ -14,9 +14,16 @@ st.set_page_config(page_title="Medhat AI", page_icon="✦", layout="wide")
 
 st.markdown("""
 <style>
-html, body, [class*="css"] { direction: rtl; }
-.block-container { max-width: 1000px; padding-top: 1rem; }
-.hero { padding: 1.2rem; border: 1px solid rgba(128,128,128,.25); border-radius: 18px; margin-bottom: 1rem; }
+html, body { direction: rtl; }
+[data-testid="stAppViewContainer"] { direction: rtl; }
+[data-testid="stMarkdownContainer"],
+[data-testid="stChatMessage"],
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
+    direction: rtl;
+    text-align: right;
+}
+.block-container { width: 100%; max-width: 1000px; padding-top: 1rem; }
+.hero { width: 100%; box-sizing: border-box; padding: 1.2rem; border: 1px solid rgba(128,128,128,.25); border-radius: 18px; margin-bottom: 1rem; }
 </style>
 """, unsafe_allow_html=True)
 
