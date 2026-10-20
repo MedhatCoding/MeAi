@@ -14,7 +14,7 @@ APP_DIR = Path(__file__).parent
 # Streamlit Cloud may mount the repository as read-only; keep the temporary SQLite DB writable.
 DB = Path(os.getenv("MEDHAT_AI_DB_PATH", "/tmp/assistant_memory.db"))
 
-st.set_page_config(page_title="Medhat AI", page_icon="✦", layout="wide")
+st.set_page_config(page_title="Medhat AI", page_icon=str(APP_DIR / "assets" / "medhat_ai_logo.svg"), layout="wide")
 
 st.markdown("""
 <style>
@@ -44,6 +44,15 @@ html, body { direction: rtl; }
     min-width: 0;
     padding: 1rem max(1rem, env(safe-area-inset-left)) 5rem max(1rem, env(safe-area-inset-right));
 }
+.brand-header {
+    display: flex; align-items: center; gap: .8rem;
+    width: 100%; box-sizing: border-box; padding: .75rem 0 1rem;
+    border-bottom: 1px solid rgba(80,150,255,.2); margin-bottom: .75rem;
+}
+.brand-header img { width: 54px; height: 54px; object-fit: contain; flex: 0 0 54px; }
+.brand-title { font-size: clamp(1.35rem, 4vw, 1.9rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.2; }
+.brand-title span { background: linear-gradient(100deg,#27d4f5,#7c5cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand-subtitle { font-size: .88rem; opacity: .75; margin-top: .25rem; }
 .hero {
     display: block;
     width: 100%;
@@ -342,7 +351,12 @@ db_init()
 
 # Keep navigation in the main page instead of the sidebar. On narrow mobile
 # viewports the sidebar's responsive layout was collapsing its text into a thin column.
-st.markdown("## ✦ Medhat AI")
+st.markdown("""
+<div class="brand-header">
+  <img src="https://raw.githubusercontent.com/MedhatCoding/Medhat-AI-Assistant/main/assets/medhat_ai_logo.svg" alt="Medhat AI logo">
+  <div><div class="brand-title">Medhat <span>AI</span></div><div class="brand-subtitle">مساعدك الذكي • برمجة وتكاملات وإنجاز مهام</div></div>
+</div>
+""", unsafe_allow_html=True)
 page = st.radio(
     "القائمة",
     ["المحادثة", "المهام", "مساحة العمل", "الذاكرة", "الإعدادات"],
