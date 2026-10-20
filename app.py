@@ -1,4 +1,5 @@
 import os
+import base64
 import re
 import json
 import sqlite3
@@ -351,9 +352,11 @@ db_init()
 
 # Keep navigation in the main page instead of the sidebar. On narrow mobile
 # viewports the sidebar's responsive layout was collapsing its text into a thin column.
-st.markdown("""
+logo_svg = (APP_DIR / "assets" / "medhat_ai_logo.svg").read_text(encoding="utf-8")
+logo_data = base64.b64encode(logo_svg.encode("utf-8")).decode("ascii")
+st.markdown(f"""
 <div class="brand-header">
-  <img src="https://raw.githubusercontent.com/MedhatCoding/Medhat-AI-Assistant/main/assets/medhat_ai_logo.svg" alt="Medhat AI logo">
+  <img src="data:image/svg+xml;base64,{logo_data}" alt="Medhat AI logo">
   <div><div class="brand-title">Medhat <span>AI</span></div><div class="brand-subtitle">مساعدك الذكي • برمجة وتكاملات وإنجاز مهام</div></div>
 </div>
 """, unsafe_allow_html=True)
