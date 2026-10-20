@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -162,88 +163,95 @@ def extract_file(upload):
     return f"الملف {upload.name}: هذا الإصدار لا يحلل الصور بعد. نحتاج نموذجًا يدعم الصور."
 
 def search_web(query):
-    """Try several DDGS engines and both web/news modes before declaring failure."""
+    """Search several engines, then Google News RSS; return structured records."""
     query = (query or "").strip()
     if not query:
-        return "SEARCH_STATUS=FAILED\\nلم يُحدَّد استعلام للبحث."
-    errors = []
+        return "SEARCH_STATUS=FAILED\nلم يُحدَّد استعلام للبحث."
+    errors, collected = [], []
     try:
         from ddgs import DDGS
+        for mode, backends in (("text", ("bing", "brave", "duckduckgo", "google", "auto")), ("news", ("bing", "duckduckgo", "auto"))):
+            for backend in backends:
+                try:
+                    client = DDGS(timeout=12)
+                    results = list(client.news(query, max_results=8, backend=backend)) if mode == "news" else list(client.text(query, max_results=8, backend=backend))
+                    for item in results:
+                        href = (item.get("url") or item.get("href") or "").strip()
+                        title = (item.get("title") or "").strip()
+                        if title and href.startswith(("https://", "http://")):
+                            collected.append({"title": title, "url": href, "snippet": (item.get("body") or item.get("snippet") or "").strip(), "date": (item.get("date") or item.get("published") or "").strip(), "source": (item.get("source") or "").strip()})
+                    if collected: break
+                except Exception as exc:
+                    errors.append(f"{mode}/{backend}: {type(exc).__name__}: {str(exc)[:70]}")
+            if collected: break
     except Exception as exc:
-        return f"SEARCH_STATUS=FAILED\\nتعذر تحميل مكتبة البحث: {type(exc).__name__}: {str(exc)[:160]}"
-    # The default auto backend can fail when one upstream engine is blocked.
-    # Try individual backends, then the auto backend as a last attempt.
-    for backend in ("bing", "brave", "duckduckgo", "google", "auto"):
+        errors.append(f"DDGS: {type(exc).__name__}: {str(exc)[:100]}")
+    if not collected:
         try:
-            try:
-                client = DDGS(timeout=12)
-            except TypeError:
-                client = DDGS()
-            results = list(client.text(query, max_results=6, backend=backend))
-            valid = []
-            for item in results:
-                href = (item.get("href") or item.get("url") or "").strip()
-                title = (item.get("title") or "").strip()
-                body = (item.get("body") or item.get("snippet") or "").strip()
-                date = (item.get("date") or item.get("published") or "").strip()
-                if href.startswith(("https://", "http://")) and title:
-                    valid.append({"title": title, "href": href, "body": body, "date": date})
-            if valid:
-                lines = ["SEARCH_STATUS=OK", f"QUERY={query}", f"BACKEND={backend}", "اعتمد على النتائج التالية فقط، ولا تخترع تاريخ نشر."]
-                for i, item in enumerate(valid[:6], 1):
-                    lines.append(f"{i}. {item['title']}\\nURL: {item['href']}\\nDATE: {item['date'] or 'غير متاح'}\\nSNIPPET: {item['body'] or 'لا يوجد ملخص'}")
-                return "\\n\\n".join(lines)
-            errors.append(f"{backend}: no results")
+            import xml.etree.ElementTree as ET
+            from urllib.parse import quote
+            rss_url = "https://news.google.com/rss/search?q=" + quote(query) + "&hl=ar&gl=EG&ceid=EG:ar"
+            response = requests.get(rss_url, headers={"User-Agent": "Mozilla/5.0 MedhatAI/1.0"}, timeout=15)
+            response.raise_for_status()
+            root = ET.fromstring(response.content)
+            for item in root.findall(".//item")[:8]:
+                title, href = (item.findtext("title") or "").strip(), (item.findtext("link") or "").strip()
+                sn = item.find("source")
+                source = (sn.text or "").strip() if sn is not None else ""
+                if title and href.startswith(("https://", "http://")):
+                    collected.append({"title": title, "url": href, "snippet": "", "date": (item.findtext("pubDate") or "").strip(), "source": source})
         except Exception as exc:
-            errors.append(f"{backend}: {type(exc).__name__}: {str(exc)[:100]}")
-    # News mode sometimes works when text search is blocked; preserve publisher/date metadata.
-    for backend in ("bing", "duckduckgo", "auto"):
-        try:
-            client = DDGS(timeout=12)
-            results = list(client.news(query, max_results=6, backend=backend))
-            valid = []
-            for item in results:
-                href = (item.get("url") or item.get("href") or "").strip()
-                title = (item.get("title") or "").strip()
-                body = (item.get("body") or item.get("snippet") or "").strip()
-                date = (item.get("date") or item.get("published") or "").strip()
-                source = (item.get("source") or "").strip()
-                if href.startswith(("https://", "http://")) and title:
-                    valid.append({"title": title, "href": href, "body": body, "date": date, "source": source})
-            if valid:
-                lines = ["SEARCH_STATUS=OK", f"QUERY={query}", f"MODE=news BACKEND={backend}"]
-                for i, item in enumerate(valid[:6], 1):
-                    lines.append(f"{i}. {item['title']}\\nURL: {item['href']}\\nSOURCE: {item.get('source') or 'غير متاح'}\\nDATE: {item['date'] or 'غير متاح'}\\nSNIPPET: {item['body'] or 'لا يوجد ملخص'}")
-                return "\\n\\n".join(lines)
-            errors.append(f"news/{backend}: no results")
-        except Exception as exc:
-            errors.append(f"news/{backend}: {type(exc).__name__}: {str(exc)[:100]}")
-    # Last-resort public RSS search: does not require an API key.
+            errors.append(f"Google News RSS: {type(exc).__name__}: {str(exc)[:100]}")
+    unique, seen = [], set()
+    for item in collected:
+        key = item["url"].split("?")[0].rstrip("/")
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    if unique:
+        return "SEARCH_STATUS=OK\nSEARCH_JSON=" + json.dumps({"query": query, "results": unique[:8]}, ensure_ascii=False)
+    return "SEARCH_STATUS=FAILED\nتعذر الوصول إلى نتائج البحث عبر محركات البحث وGoogle News RSS. لن أعرض أخبارًا أو روابط غير متحققة. " + " | ".join(errors[:5])
+
+def format_search_results(search_context):
+    """Render source URLs directly so the language model cannot corrupt them."""
     try:
-        import xml.etree.ElementTree as ET
-        from urllib.parse import quote
-        rss_url = "https://news.google.com/rss/search?q=" + quote(query) + "&hl=ar&gl=EG&ceid=EG:ar"
-        response = requests.get(rss_url, headers={"User-Agent": "Mozilla/5.0 MedhatAI/1.0"}, timeout=15)
-        response.raise_for_status()
-        root = ET.fromstring(response.content)
-        valid = []
-        for item in root.findall(".//item")[:6]:
-            title = (item.findtext("title") or "").strip()
-            href = (item.findtext("link") or "").strip()
-            date = (item.findtext("pubDate") or "").strip()
-            source_node = item.find("source")
-            source = (source_node.text or "").strip() if source_node is not None else ""
-            if title and href.startswith(("https://", "http://")):
-                valid.append({"title": title, "href": href, "date": date, "source": source})
-        if valid:
-            lines = ["SEARCH_STATUS=OK", f"QUERY={query}", "MODE=Google News RSS"]
-            for i, item in enumerate(valid, 1):
-                lines.append(f"{i}. {item['title']}\\nURL: {item['href']}\\nSOURCE: {item['source'] or 'غير متاح'}\\nDATE: {item['date'] or 'غير متاح'}")
-            return "\\n\\n".join(lines)
-        errors.append("Google News RSS: no items")
-    except Exception as exc:
-        errors.append(f"Google News RSS: {type(exc).__name__}: {str(exc)[:100]}")
-    return "SEARCH_STATUS=FAILED\\nتعذر الوصول إلى نتائج البحث عبر محركات البحث وGoogle News RSS. لن أعرض أخبارًا أو روابط غير متحققة. " + " | ".join(errors[:6])
+        payload = json.loads(search_context.split("SEARCH_JSON=", 1)[1])
+        results = payload.get("results", [])
+    except Exception:
+        return "تعذر تنسيق نتائج البحث بشكل موثوق."
+    from email.utils import parsedate_to_datetime
+    from datetime import timedelta, timezone
+    from urllib.parse import urlparse
+    now = datetime.now(timezone.utc)
+    recent = bool(re.search(r"(آخر|اخر|last)\s*7\s*(أيام|ايام|days)", payload.get("query", "").lower()))
+    output, verified_dates = [], 0
+    for item in results:
+        raw_date = item.get("date", "")
+        dt = None
+        if raw_date:
+            try:
+                dt = parsedate_to_datetime(raw_date)
+                if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.astimezone(timezone.utc)
+            except Exception:
+                try:
+                    dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                    if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.astimezone(timezone.utc)
+                except Exception:
+                    dt = None
+        if recent and dt and not (now - timedelta(days=7) <= dt <= now + timedelta(hours=12)):
+            continue
+        if recent and dt: verified_dates += 1
+        host = urlparse(item["url"]).netloc
+        date_label = dt.strftime("%Y-%m-%d") if dt else (raw_date or "غير متاح")
+        snippet = re.sub(r"\s+", " ", item.get("snippet", "")).strip()
+        output.append(f"### {len(output)+1}. {item['title']}\n- **المصدر:** {item.get('source') or host}\n- **تاريخ النشر:** {date_label}\n- **الرابط:** [{host}]({item['url']})\n- **الملخص:** {snippet if snippet else 'المقتطف غير كافٍ لكتابة ملخص موثوق؛ افتح الرابط للتفاصيل.'}")
+        if len(output) >= 5: break
+    if not output:
+        return "لم أجد نتائج يمكن التحقق من أنها منشورة خلال آخر 7 أيام؛ لن أعرض أخبارًا أقدم على أنها حديثة."
+    note = "\n\n**تنبيه:** لم تتوفر تواريخ نشر موثوقة لخمسة أخبار ضمن آخر 7 أيام. راجع أي نتيجة تاريخها «غير متاح» قبل الاعتماد عليها." if recent and verified_dates < 5 else ""
+    return "## نتائج البحث\n\n" + "\n\n".join(output) + note
 
 def _provider_configs():
     """Return configured providers in priority order; missing credentials are skipped."""
@@ -370,11 +378,10 @@ if page == "المحادثة":
         with st.chat_message("assistant"):
             with st.spinner("جاري البحث والتحقق..." if wants_search else "جاري إعداد الإجابة..."):
                 if wants_search and search_context.startswith("SEARCH_STATUS=FAILED"):
-                    answer = "لم أتمكن من الوصول إلى نتائج بحث مباشرة الآن، لذلك لن أخترع أخبارًا أو روابط.\\n\\n**تفاصيل فنية:** " + search_context.replace("SEARCH_STATUS=FAILED\\n", "")
+                    answer = "لم أتمكن من الوصول إلى نتائج بحث مباشرة الآن، لذلك لن أخترع أخبارًا أو روابط.\n\n**تفاصيل فنية:** " + search_context.replace("SEARCH_STATUS=FAILED\\n", "")
+                elif wants_search and search_context.startswith("SEARCH_STATUS=OK"):
+                    answer = format_search_results(search_context)
                 else:
-                    if wants_search:
-                        system += "\\nقواعد البحث الإلزامية: لخّص نتائج البحث المرفقة فقط؛ لا تضف مصادر أو وقائع أو تواريخ من عندك. اذكر عنوان المصدر ورابطه، وصرّح إذا كانت المقتطفات غير كافية."
-                        history[0] = {"role": "system", "content": system}
                     try:
                         answer = call_model(history)
                     except Exception as e:
