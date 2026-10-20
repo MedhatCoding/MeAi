@@ -244,7 +244,7 @@ page = st.radio(
     label_visibility="collapsed",
 )
 st.caption("نسخة أولية قابلة للتطوير")
-st.caption("حالة المفتاح: " + ("مُعدّ ✅" if secret("AI_API_KEY") else "غير مُعدّ ⚠️"))
+st.caption("حالة مزوّد الذكاء الاصطناعي: " + ("مُعدّ ✅" if _provider_configs() else "غير مُعدّ ⚠️"))
 if cloud_memory_enabled():
     st.caption("الذاكرة: قاعدة بيانات دائمة متصلة ✅")
 else:
