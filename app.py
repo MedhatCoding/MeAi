@@ -109,13 +109,13 @@ def retrieve_memories(query, limit=10):
     rows = memories()
     if not rows:
         return []
-    words = set(re.findall(r"[\\w]{3,}", query.lower(), flags=re.UNICODE))
+    words = set(re.findall(r"[\w]{3,}", query.lower(), flags=re.UNICODE))
     stop = {"الذي", "التي", "على", "إلى", "من", "في", "عن", "مع", "هذا", "هذه", "ذلك", "كيف", "ماذا", "هل", "كان", "كانت", "عايز", "اريد", "ممكن", "please", "what", "when", "where", "how", "the", "and", "for"}
     words -= stop
     scored = []
     for index, row in enumerate(rows):
         text = f"{row[1]} {row[2]}".lower()
-        tokens = set(re.findall(r"[\\w]{3,}", text, flags=re.UNICODE))
+        tokens = set(re.findall(r"[\w]{3,}", text, flags=re.UNICODE))
         overlap = len(words & tokens)
         scored.append((overlap, -index, row))
     matched = [item for item in sorted(scored, reverse=True, key=lambda x: (x[0], x[1])) if item[0] > 0]
