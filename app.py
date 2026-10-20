@@ -63,7 +63,31 @@ def secret(key, default=""):
     except Exception:
         return os.getenv(key, default)
 
+def supabase_config():
+    url = secret("SUPABASE_URL").strip().rstrip("/")
+    key = secret("SUPABASE_SERVICE_ROLE_KEY") or secret("SUPABASE_KEY")
+    return url, key
+
+def cloud_memory_enabled():
+    url, key = supabase_config()
+    return bool(url and key)
+
+def cloud_memory_request(method, params=None, payload=None):
+    url, key = supabase_config()
+    if not (url and key):
+        raise RuntimeError("إعداد Supabase غير مكتمل.")
+    headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    if method == "POST":
+        headers["Prefer"] = "return=representation"
+    response = requests.request(method, url + "/rest/v1/memories", headers=headers, params=params, json=payload, timeout=20)
+    if response.status_code >= 400:
+        raise RuntimeError(f"Supabase HTTP {response.status_code}: {response.text[:300]}")
+    if not response.text.strip():
+        return []
+    return response.json()
+
 def db_init():
+    # Local fallback remains available until Supabase is configured.
     with sqlite3.connect(DB) as con:
         con.execute("""CREATE TABLE IF NOT EXISTS memories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,15 +97,23 @@ def db_init():
         )""")
 
 def memories():
+    if cloud_memory_enabled():
+        rows = cloud_memory_request("GET", {"select": "id,category,content,created_at", "order": "id.desc", "limit": "40"})
+        return [(r["id"], r["category"], r["content"], str(r["created_at"])) for r in rows]
     with sqlite3.connect(DB) as con:
         return con.execute("SELECT id, category, content, created_at FROM memories ORDER BY id DESC LIMIT 40").fetchall()
 
 def save_memory(category, content):
+    if cloud_memory_enabled():
+        cloud_memory_request("POST", payload={"category": category[:80], "content": content[:4000]})
+        return
     with sqlite3.connect(DB) as con:
-        con.execute("INSERT INTO memories(category,content,created_at) VALUES(?,?,?)",
-                    (category[:80], content[:4000], datetime.utcnow().isoformat()))
+        con.execute("INSERT INTO memories(category,content,created_at) VALUES(?,?,?)", (category[:80], content[:4000], datetime.utcnow().isoformat()))
 
 def delete_memory(mid):
+    if cloud_memory_enabled():
+        cloud_memory_request("DELETE", params={"id": f"eq.{int(mid)}"})
+        return
     with sqlite3.connect(DB) as con:
         con.execute("DELETE FROM memories WHERE id=?", (int(mid),))
 
@@ -146,6 +178,10 @@ page = st.radio(
 )
 st.caption("نسخة أولية قابلة للتطوير")
 st.caption("حالة المفتاح: " + ("مُعدّ ✅" if secret("AI_API_KEY") else "غير مُعدّ ⚠️"))
+if cloud_memory_enabled():
+    st.caption("الذاكرة: قاعدة بيانات دائمة متصلة ✅")
+else:
+    st.caption("الذاكرة: تخزين مؤقت على الاستضافة ⚠️ — اربط Supabase للاحتفاظ بها بعد إعادة التشغيل.")
 st.divider()
 
 if page == "المحادثة":
@@ -198,7 +234,7 @@ elif page == "الذاكرة":
         submit = st.form_submit_button("حفظ")
     if submit and content.strip():
         save_memory(category, content)
-        st.success("تم الحفظ في قاعدة الذاكرة المحلية لهذه النسخة.")
+        st.success("تم الحفظ في قاعدة البيانات الدائمة." if cloud_memory_enabled() else "تم الحفظ مؤقتًا. اربط Supabase للاحتفاظ بالبيانات بعد إعادة تشغيل الاستضافة.")
     for row in memories():
         with st.container(border=True):
             st.caption(f"{row[1]} • {row[3][:10]}")
