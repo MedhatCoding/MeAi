@@ -218,7 +218,32 @@ def search_web(query):
             errors.append(f"news/{backend}: no results")
         except Exception as exc:
             errors.append(f"news/{backend}: {type(exc).__name__}: {str(exc)[:100]}")
-    return "SEARCH_STATUS=FAILED\\nمحرك البحث لم يُرجع نتائج بعد تجربة أكثر من واجهة. لا تعرض أخبارًا أو روابط على أنها مؤكدة. " + " | ".join(errors[:6])
+    # Last-resort public RSS search: does not require an API key.
+    try:
+        import xml.etree.ElementTree as ET
+        from urllib.parse import quote
+        rss_url = "https://news.google.com/rss/search?q=" + quote(query) + "&hl=ar&gl=EG&ceid=EG:ar"
+        response = requests.get(rss_url, headers={"User-Agent": "Mozilla/5.0 MedhatAI/1.0"}, timeout=15)
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+        valid = []
+        for item in root.findall(".//item")[:6]:
+            title = (item.findtext("title") or "").strip()
+            href = (item.findtext("link") or "").strip()
+            date = (item.findtext("pubDate") or "").strip()
+            source_node = item.find("source")
+            source = (source_node.text or "").strip() if source_node is not None else ""
+            if title and href.startswith(("https://", "http://")):
+                valid.append({"title": title, "href": href, "date": date, "source": source})
+        if valid:
+            lines = ["SEARCH_STATUS=OK", f"QUERY={query}", "MODE=Google News RSS"]
+            for i, item in enumerate(valid, 1):
+                lines.append(f"{i}. {item['title']}\\nURL: {item['href']}\\nSOURCE: {item['source'] or 'غير متاح'}\\nDATE: {item['date'] or 'غير متاح'}")
+            return "\\n\\n".join(lines)
+        errors.append("Google News RSS: no items")
+    except Exception as exc:
+        errors.append(f"Google News RSS: {type(exc).__name__}: {str(exc)[:100]}")
+    return "SEARCH_STATUS=FAILED\\nتعذر الوصول إلى نتائج البحث عبر محركات البحث وGoogle News RSS. لن أعرض أخبارًا أو روابط غير متحققة. " + " | ".join(errors[:6])
 
 def _provider_configs():
     """Return configured providers in priority order; missing credentials are skipped."""
