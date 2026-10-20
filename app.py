@@ -162,29 +162,24 @@ def extract_file(upload):
     return f"الملف {upload.name}: هذا الإصدار لا يحلل الصور بعد. نحتاج نموذجًا يدعم الصور."
 
 def search_web(query):
-    """Run a real web search; mark failures so the assistant cannot invent sources."""
+    """Try several DDGS engines and both web/news modes before declaring failure."""
     query = (query or "").strip()
     if not query:
         return "SEARCH_STATUS=FAILED\\nلم يُحدَّد استعلام للبحث."
     errors = []
-    searchers = []
     try:
         from ddgs import DDGS
-        searchers.append(("ddgs", DDGS))
     except Exception as exc:
-        errors.append(f"ddgs import: {type(exc).__name__}")
-    try:
-        from duckduckgo_search import DDGS as LegacyDDGS
-        searchers.append(("duckduckgo_search", LegacyDDGS))
-    except Exception as exc:
-        errors.append(f"legacy import: {type(exc).__name__}")
-    for package_name, searcher in searchers:
+        return f"SEARCH_STATUS=FAILED\\nتعذر تحميل مكتبة البحث: {type(exc).__name__}: {str(exc)[:160]}"
+    # The default auto backend can fail when one upstream engine is blocked.
+    # Try individual backends, then the auto backend as a last attempt.
+    for backend in ("bing", "brave", "duckduckgo", "google", "auto"):
         try:
             try:
-                client = searcher(timeout=15)
+                client = DDGS(timeout=12)
             except TypeError:
-                client = searcher()
-            results = list(client.text(query, max_results=6))
+                client = DDGS()
+            results = list(client.text(query, max_results=6, backend=backend))
             valid = []
             for item in results:
                 href = (item.get("href") or item.get("url") or "").strip()
@@ -194,14 +189,36 @@ def search_web(query):
                 if href.startswith(("https://", "http://")) and title:
                     valid.append({"title": title, "href": href, "body": body, "date": date})
             if valid:
-                lines = ["SEARCH_STATUS=OK", f"QUERY={query}", "اعتمد على المصادر التالية فقط ولا تخترع تواريخ نشر."]
+                lines = ["SEARCH_STATUS=OK", f"QUERY={query}", f"BACKEND={backend}", "اعتمد على النتائج التالية فقط، ولا تخترع تاريخ نشر."]
                 for i, item in enumerate(valid[:6], 1):
                     lines.append(f"{i}. {item['title']}\\nURL: {item['href']}\\nDATE: {item['date'] or 'غير متاح'}\\nSNIPPET: {item['body'] or 'لا يوجد ملخص'}")
                 return "\\n\\n".join(lines)
-            errors.append(f"{package_name}: no valid results")
+            errors.append(f"{backend}: no results")
         except Exception as exc:
-            errors.append(f"{package_name}: {type(exc).__name__}: {str(exc)[:140]}")
-    return "SEARCH_STATUS=FAILED\\nتعذر التحقق من نتائج الإنترنت. لا تعرض أخبارًا أو روابط كأنها نتائج مؤكدة. " + " | ".join(errors[:3])
+            errors.append(f"{backend}: {type(exc).__name__}: {str(exc)[:100]}")
+    # News mode sometimes works when text search is blocked; preserve publisher/date metadata.
+    for backend in ("bing", "duckduckgo", "auto"):
+        try:
+            client = DDGS(timeout=12)
+            results = list(client.news(query, max_results=6, backend=backend))
+            valid = []
+            for item in results:
+                href = (item.get("url") or item.get("href") or "").strip()
+                title = (item.get("title") or "").strip()
+                body = (item.get("body") or item.get("snippet") or "").strip()
+                date = (item.get("date") or item.get("published") or "").strip()
+                source = (item.get("source") or "").strip()
+                if href.startswith(("https://", "http://")) and title:
+                    valid.append({"title": title, "href": href, "body": body, "date": date, "source": source})
+            if valid:
+                lines = ["SEARCH_STATUS=OK", f"QUERY={query}", f"MODE=news BACKEND={backend}"]
+                for i, item in enumerate(valid[:6], 1):
+                    lines.append(f"{i}. {item['title']}\\nURL: {item['href']}\\nSOURCE: {item.get('source') or 'غير متاح'}\\nDATE: {item['date'] or 'غير متاح'}\\nSNIPPET: {item['body'] or 'لا يوجد ملخص'}")
+                return "\\n\\n".join(lines)
+            errors.append(f"news/{backend}: no results")
+        except Exception as exc:
+            errors.append(f"news/{backend}: {type(exc).__name__}: {str(exc)[:100]}")
+    return "SEARCH_STATUS=FAILED\\nمحرك البحث لم يُرجع نتائج بعد تجربة أكثر من واجهة. لا تعرض أخبارًا أو روابط على أنها مؤكدة. " + " | ".join(errors[:6])
 
 def _provider_configs():
     """Return configured providers in priority order; missing credentials are skipped."""
