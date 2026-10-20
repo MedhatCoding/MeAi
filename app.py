@@ -159,7 +159,7 @@ def _provider_configs():
             "name": "OpenRouter",
             "url": (secret("OPENROUTER_BASE_URL") or secret("AI_BASE_URL", "https://openrouter.ai/api/v1")).rstrip("/") + "/chat/completions",
             "key": key,
-            "model": secret("OPENROUTER_MODEL") or secret("AI_MODEL", "openai/gpt-oss-20b:free"),
+            "model": secret("OPENROUTER_MODEL") or secret("AI_MODEL", "openrouter/free"),
             "headers": {"HTTP-Referer": "https://github.com/", "X-Title": "Medhat AI Assistant"},
         })
     # Groq OpenAI-compatible API; requires GROQ_API_KEY in Streamlit Secrets.
