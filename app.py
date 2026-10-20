@@ -149,21 +149,88 @@ def search_web(query):
     except Exception as e:
         return f"البحث غير متاح حاليًا: {e}"
 
+def _provider_configs():
+    """Return configured providers in priority order; missing credentials are skipped."""
+    providers = []
+    # OpenRouter supports multiple free models, depending on current availability.
+    key = secret("OPENROUTER_API_KEY") or secret("AI_API_KEY")
+    if key:
+        providers.append({
+            "name": "OpenRouter",
+            "url": (secret("OPENROUTER_BASE_URL") or secret("AI_BASE_URL", "https://openrouter.ai/api/v1")).rstrip("/") + "/chat/completions",
+            "key": key,
+            "model": secret("OPENROUTER_MODEL") or secret("AI_MODEL", "openai/gpt-oss-20b:free"),
+            "headers": {"HTTP-Referer": "https://github.com/", "X-Title": "Medhat AI Assistant"},
+        })
+    # Groq OpenAI-compatible API; requires GROQ_API_KEY in Streamlit Secrets.
+    key = secret("GROQ_API_KEY")
+    if key:
+        providers.append({
+            "name": "Groq",
+            "url": "https://api.groq.com/openai/v1/chat/completions",
+            "key": key,
+            "model": secret("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            "headers": {},
+        })
+    # Cerebras OpenAI-compatible API; requires CEREBRAS_API_KEY.
+    key = secret("CEREBRAS_API_KEY")
+    if key:
+        providers.append({
+            "name": "Cerebras",
+            "url": "https://api.cerebras.ai/v1/chat/completions",
+            "key": key,
+            "model": secret("CEREBRAS_MODEL", "llama3.1-8b"),
+            "headers": {},
+        })
+    # Google Gemini native REST API; requires GEMINI_API_KEY or GOOGLE_API_KEY.
+    key = secret("GEMINI_API_KEY") or secret("GOOGLE_API_KEY")
+    if key:
+        providers.append({
+            "name": "Google Gemini",
+            "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            "key": key,
+            "model": secret("GEMINI_MODEL", "gemini-2.5-flash"),
+            "headers": {},
+        })
+    return providers
+
+
 def call_model(messages):
-    key = secret("AI_API_KEY")
-    base = secret("AI_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-    model = secret("AI_MODEL", "openai/gpt-oss-20b:free")
-    if not key:
-        raise RuntimeError("أضف AI_API_KEY في إعدادات Secrets على الاستضافة. لا تضع المفتاح داخل الكود.")
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-    if "openrouter.ai" in base:
-        headers["HTTP-Referer"] = "https://github.com/"
-        headers["X-Title"] = "Medhat AI Assistant"
-    res = requests.post(base + "/chat/completions", headers=headers,
-                        json={"model": model, "messages": messages, "temperature": 0.4}, timeout=120)
-    if res.status_code >= 400:
-        raise RuntimeError(f"مزود النموذج أعاد HTTP {res.status_code}: {res.text[:800]}")
-    return res.json()["choices"][0]["message"]["content"]
+    providers = _provider_configs()
+    if not providers:
+        raise RuntimeError(
+            "لا يوجد مزوّد ذكاء اصطناعي مُعدّ بعد. التبديل التلقائي جاهز، لكنه يحتاج مفتاحًا واحدًا على الأقل "
+            "من مزوّد مدعوم في Secrets (OPENROUTER_API_KEY أو GROQ_API_KEY أو CEREBRAS_API_KEY أو GEMINI_API_KEY). "
+            "Supabase خاص بالذاكرة ولا يولّد الإجابات."
+        )
+    errors = []
+    for provider in providers:
+        headers = {
+            "Authorization": f"Bearer {provider['key']}",
+            "Content-Type": "application/json",
+            **provider["headers"],
+        }
+        try:
+            res = requests.post(
+                provider["url"],
+                headers=headers,
+                json={"model": provider["model"], "messages": messages, "temperature": 0.4},
+                timeout=90,
+            )
+            if res.status_code >= 400:
+                errors.append(f"{provider['name']}: HTTP {res.status_code} — {res.text[:220]}")
+                continue
+            data = res.json()
+            answer = data["choices"][0]["message"]["content"]
+            if isinstance(answer, list):
+                answer = "\\n".join(str(part.get("text", part)) if isinstance(part, dict) else str(part) for part in answer)
+            if not str(answer).strip():
+                errors.append(f"{provider['name']}: رد فارغ")
+                continue
+            return str(answer)
+        except Exception as exc:
+            errors.append(f"{provider['name']}: {str(exc)[:180]}")
+    raise RuntimeError("فشل كل مزوّدي الذكاء الاصطناعي المُعدّين: " + " | ".join(errors))
 
 db_init()
 
