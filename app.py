@@ -361,6 +361,19 @@ if page == "المحادثة":
     file_context = f"محتوى الملف {upload.name}:\n{extract_file(upload)}" if upload else ""
     if "chat" not in st.session_state:
         st.session_state.chat = []
+    # Export the current conversation as a downloadable UTF-8 Markdown transcript.
+    if st.session_state.get("chat"):
+        transcript = "\\n\\n".join(
+            ("## المستخدم\\n" if m["role"] == "user" else "## Medhat AI\\n") + m["content"]
+            for m in st.session_state.chat
+        )
+        st.download_button(
+            "⬇️ تنزيل المحادثة بصيغة Markdown",
+            data=transcript.encode("utf-8"),
+            file_name=f"medhat-ai-chat-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
     for msg in st.session_state.chat:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
@@ -424,6 +437,23 @@ if page == "المحادثة":
 elif page == "الذاكرة":
     st.title("🧠 الذاكرة")
     st.write("أضف معلومات تريد أن يسترجعها المساعد. لا تحفظ مفاتيح أو كلمات مرور.")
+    try:
+        memory_rows = memories()
+    except Exception as exc:
+        memory_rows = []
+        st.error(f"تعذر تحميل عناصر الذاكرة: {type(exc).__name__}: {str(exc)[:160]}")
+    if memory_rows:
+        memory_export = "\\n\\n".join(
+            f"## {row[1]}\\n\\n{row[2]}\\n\\nتاريخ الإضافة: {row[3]}"
+            for row in memory_rows
+        )
+        st.download_button(
+            "⬇️ تنزيل نسخة من الذاكرة",
+            data=memory_export.encode("utf-8"),
+            file_name=f"medhat-ai-memory-{datetime.now().strftime('%Y%m%d')}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
     with st.form("add_memory", clear_on_submit=True):
         category = st.text_input("التصنيف", "مشروع أو تفضيل")
         content = st.text_area("المعلومة")
