@@ -1,0 +1,22 @@
+{
+  "id": "./",
+  "name": "Medhat AI",
+  "short_name": "Medhat AI",
+  "description": "مساعدك الذكي الشخصي",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "icons": [
+    {
+      "src": "./icons/medhat-ai.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
