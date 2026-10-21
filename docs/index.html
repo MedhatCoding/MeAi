@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101827"><meta name="description" content="Medhat AI — مساعدك الذكي الشخصي">
+<link rel="manifest" href="./manifest.json"><link rel="icon" href="./icons/medhat-ai.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="./icons/medhat-ai.svg">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Medhat AI"><meta name="mobile-web-app-capable" content="yes">
+<title>Medhat AI</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:system-ui,-apple-system,sans-serif;background:#101827;color:#f5f7ff}
+header{height:62px;display:flex;align-items:center;gap:12px;padding:8px 14px;background:#101827;border-bottom:1px solid #293954}
+header img{width:42px;height:42px}header strong{font-size:19px}header small{display:block;color:#b9c7df;font-size:11px}
+main{height:calc(100dvh - 62px);height:calc(100vh - 62px)}iframe{border:0;width:100%;height:100%;background:#fff}
+.notice{padding:8px 14px;background:#1c2b44;font-size:12px;color:#e0eaff}
+</style>
+</head>
+<body>
+<header><img src="./icons/medhat-ai.svg" alt="Medhat AI"><div><strong>Medhat AI</strong><small>مساعدك الذكي الشخصي</small></div></header>
+<div class="notice">الواجهة المستقلة لـ Medhat AI — يتم تحميل المساعد الحالي أدناه.</div>
+<main><iframe title="Medhat AI assistant" src="https://medhat-ai-personal.streamlit.app/?embed=true" allow="clipboard-read; clipboard-write"></iframe></main>
+<script>
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
+</script>
+</body></html>
