@@ -572,7 +572,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 page = st.radio(
     "القائمة",
-    ["المحادثة", "المهام", "مساحة العمل", "توليد الصور", "الذاكرة", "الإعدادات"],
+    ["المحادثة", "الوكيل", "المهام", "مساحة العمل", "توليد الصور", "توليد الفيديو", "الذاكرة", "الإعدادات"],
     horizontal=True,
     label_visibility="collapsed",
 )
@@ -796,6 +796,80 @@ elif page == "مساحة العمل":
                         st.caption(f"تعذر قراءة الملف: {type(exc).__name__}")
     st.caption("مساحة العمل مؤقتة على الاستضافة وقد تُمسح عند إعادة تشغيل البيئة؛ نزّل الملفات المهمة أو اربطها لاحقًا بمستودع GitHub.")
 
+elif page == "الوكيل":
+    st.title("🤖 الوكيل التنفيذي")
+    st.write("نفّذ مهام محددة داخل مساحة العمل باستخدام أدوات محدودة، مع سجل واضح لما حدث.")
+    st.warning("الوكيل لا يشغّل أوامر النظام ولا ينشر أو يرسل أو يشتري شيئًا. كتابة الملفات محصورة داخل مساحة العمل المؤقتة، والتحقق ثابت دون تشغيل الكود.")
+    if "agent_runs" not in st.session_state:
+        st.session_state.agent_runs = []
+    with st.form("agent_execute_form"):
+        agent_goal = st.text_area("المهمة المطلوب تنفيذها", placeholder="مثال: أنشئ أداة Python تنظف ملف CSV وتتحقق من الأعمدة، مع اختبارات وREADME.", height=120)
+        agent_mode = st.selectbox("نطاق التنفيذ", ["خطة فقط", "إنشاء ملفات داخل مساحة العمل"])
+        agent_confirm = st.checkbox("أوافق على تنفيذ الخطوات داخل مساحة العمل المؤقتة فقط", value=False, disabled=(agent_mode == "خطة فقط"))
+        run_agent = st.form_submit_button("تشغيل الوكيل", type="primary", use_container_width=True)
+    if run_agent:
+        if not agent_goal.strip():
+            st.warning("اكتب المهمة أولًا.")
+        elif agent_mode != "خطة فقط" and not agent_confirm:
+            st.warning("أكد السماح بإنشاء الملفات داخل مساحة العمل.")
+        else:
+            with st.spinner("الوكيل يحلل المهمة ويجهز خطوات التنفيذ..."):
+                try:
+                    tool_policy = """أنت وكيل تنفيذ داخل تطبيق شخصي. أعد JSON صالحًا فقط بالشكل:
+{"summary":"ملخص","actions":[{"type":"write_file","path":"relative/path.py","purpose":"وصف قصير","content":"محتوى الملف الكامل"}],"checks":["فحص مطلوب"]}
+قواعد: أنشئ بحد أقصى 4 ملفات، امتدادات مسموحة فقط (.py,.md,.txt,.json,.csv,.yaml,.yml,.toml,.html,.css,.js,.ts,.sql,.xml,.sh,.ini)، لا مسارات مخفية أو ../، لا أسرار حقيقية، لا أوامر shell، لا تدّع تشغيل الكود. إذا كانت المهمة لا تحتاج ملفات أعد actions فارغة. اجعل المحتوى كاملًا وقابلًا للصيانة، وأضف اختبارات مناسبة عند طلبها."""
+                    response = call_model([
+                        {"role":"system","content":tool_policy},
+                        {"role":"user","content":"المهمة: "+agent_goal.strip()+"\nوضع التنفيذ: "+agent_mode+"\nأخرج JSON فقط."}
+                    ])
+                    cleaned = re.sub(r"^\s*```(?:json)?\s*\n?", "", response.strip(), flags=re.I)
+                    cleaned = re.sub(r"\n?```\s*$", "", cleaned)
+                    payload = json.loads(cleaned)
+                    actions = payload.get("actions", [])
+                    if not isinstance(actions, list) or len(actions) > 4:
+                        raise ValueError("خطة الوكيل غير صالحة: الحد الأقصى أربعة ملفات.")
+                    log = []
+                    if agent_mode == "خطة فقط":
+                        log.append("وضع التخطيط فقط: لم تُكتب أي ملفات.")
+                    else:
+                        for action in actions:
+                            if not isinstance(action, dict) or action.get("type") != "write_file":
+                                log.append("تم تخطي إجراء غير مسموح.")
+                                continue
+                            path = str(action.get("path", "")).strip()
+                            content = str(action.get("content", ""))
+                            saved = write_workspace_file(path, content)
+                            validation = validate_workspace_file(path)
+                            log.append(f"{path}: {'نجح الفحص' if validation.get('ok') else 'الفحص يحتاج مراجعة'} — {validation.get('message','')}")
+                    st.session_state.agent_runs.insert(0, {
+                        "goal":agent_goal.strip(),"summary":str(payload.get("summary","")),
+                        "actions":actions if agent_mode != "خطة فقط" else [],
+                        "checks":payload.get("checks",[]),"log":log,
+                        "time":datetime.now().isoformat(timespec="minutes")
+                    })
+                    st.success("انتهت دورة الوكيل. راجع سجل التنفيذ والملفات الناتجة.")
+                except Exception as exc:
+                    st.error(f"تعذر إكمال دورة الوكيل: {type(exc).__name__}: {str(exc)[:240]}")
+    for idx, run in enumerate(st.session_state.agent_runs[:5]):
+        with st.container(border=True):
+            st.subheader(run.get("summary") or run.get("goal","مهمة"))
+            st.caption(run.get("time",""))
+            st.write(run.get("goal",""))
+            if run.get("checks"):
+                st.markdown("**معايير التحقق**")
+                for item in run["checks"]:
+                    st.write("• "+str(item))
+            for item in run.get("log",[]):
+                st.info(item)
+            for action in run.get("actions",[]):
+                if action.get("type") == "write_file":
+                    st.caption("ملف: "+str(action.get("path","")))
+                    if action.get("content"):
+                        st.download_button("تنزيل "+str(action.get("path","ملف")), data=str(action["content"]).encode("utf-8"), file_name=str(action["path"]).split("/")[-1], mime="text/plain", key=f"agent_download_{idx}_{action.get('path')}")
+    if st.button("مسح سجل الوكيل"):
+        st.session_state.agent_runs = []
+        st.rerun()
+
 elif page == "المهام":
     st.title("🧭 وكيل المهام")
     st.write("حوّل الهدف إلى خطوات قابلة للمتابعة، وراجع كل خطوة قبل اعتبارها مكتملة.")
@@ -917,6 +991,32 @@ elif page == "توليد الصور":
             mime="image/png",
             use_container_width=True,
         )
+
+elif page == "توليد الفيديو":
+    st.title("🎬 توليد الفيديو")
+    st.write("حوّل وصفًا نصيًا إلى مقطع فيديو باستخدام Hugging Face Inference Providers عند إعداد مفتاح يدعم مزوّد الفيديو.")
+    st.info("توليد الفيديو قد يستهلك رصيدًا لدى المزوّد. لن يتم إرسال الطلب إلا بعد الضغط على زر الإنشاء، وقد تختلف الإتاحة والأسعار حسب النموذج والمزوّد.")
+    with st.form("video_generation_form"):
+        video_prompt = st.text_area("وصف المشهد", placeholder="مشهد سينمائي واقعي لشوارع القاهرة وقت الغروب، حركة كاميرا بطيئة، إضاءة ذهبية، تفاصيل واضحة...", height=130, max_chars=1800)
+        video_model = st.text_input("معرّف النموذج", value=secret("HF_VIDEO_MODEL", "Wan-AI/Wan2.2-TI2V-5B"))
+        video_negative = st.text_input("عناصر يجب تجنبها (اختياري)", value="low quality, flicker, distorted objects")
+        generate_video = st.form_submit_button("إنشاء الفيديو", type="primary", use_container_width=True)
+    if generate_video:
+        if not video_prompt.strip():
+            st.warning("اكتب وصف الفيديو أولًا.")
+        else:
+            try:
+                from video_tools import generate_video as make_video
+                with st.spinner("جاري إرسال الطلب إلى مزوّد الفيديو؛ قد يستغرق عدة دقائق..."):
+                    video_bytes, provider_label = make_video(video_prompt.strip(), model=video_model.strip(), negative_prompt=video_negative.strip())
+                st.session_state["last_generated_video"] = video_bytes
+                st.session_state["last_generated_video_model"] = provider_label
+                st.success("تم إنشاء الفيديو بنجاح عبر "+provider_label)
+            except Exception as exc:
+                st.error(f"تعذر إنشاء الفيديو: {type(exc).__name__}: {str(exc)[:350]}")
+    if st.session_state.get("last_generated_video"):
+        st.video(st.session_state["last_generated_video"])
+        st.download_button("⬇️ تنزيل الفيديو MP4", data=st.session_state["last_generated_video"], file_name="medhat-ai-generated.mp4", mime="video/mp4", use_container_width=True)
 
 elif page == "الذاكرة":
     st.title("🧠 الذاكرة")
