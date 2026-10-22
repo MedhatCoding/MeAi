@@ -341,6 +341,7 @@ def call_model(messages):
             if not str(answer).strip():
                 errors.append(f"{provider['name']}: رد فارغ")
                 continue
+            st.session_state["last_ai_provider"] = provider["name"]
             return str(answer)
         except Exception as exc:
             errors.append(f"{provider['name']}: {str(exc)[:180]}")
@@ -365,7 +366,11 @@ page = st.radio(
     label_visibility="collapsed",
 )
 st.caption("نسخة أولية قابلة للتطوير")
-st.caption("حالة مزوّد الذكاء الاصطناعي: " + ("مُعدّ ✅" if _provider_configs() else "غير مُعدّ ⚠️"))
+configured_providers = _provider_configs()
+st.caption("حالة مزوّد الذكاء الاصطناعي: " + ("مُعدّ ✅" if configured_providers else "غير مُعدّ ⚠️"))
+st.caption("وضع الاختيار: " + secret("AI_PROVIDER", "auto") + " — ترتيب التلقائي يبدأ بـ Cloudflare ثم المزوّدين البدلاء المُعدّين.")
+if st.session_state.get("last_ai_provider"):
+    st.caption("آخر مزوّد نجح في الرد: " + st.session_state["last_ai_provider"])
 if cloud_memory_enabled():
     st.caption("الذاكرة: قاعدة بيانات دائمة متصلة ✅")
 else:
