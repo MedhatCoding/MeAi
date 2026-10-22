@@ -215,10 +215,20 @@ def search_web(query):
         if not words:
             return True
         haystack = text.lower()
-        meaningful = [w for w in words if w not in {"ابحث", "الإنترنت", "الانترنت", "معلومات", "اعطني", "اذكر", "latest", "news", "search", "about", "find"}]
+        stopwords = {
+            "ابحث", "الإنترنت", "الانترنت", "على", "عن", "في", "من", "الى", "إلى",
+            "معلومات", "اعطني", "أعطني", "اذكر", "اشرح", "وضح", "ما", "هو", "هي",
+            "هل", "كيف", "لماذا", "متى", "احدث", "أحدث", "آخر", "اخر", "اخبار",
+            "أخبار", "خبر", "اليوم", "هذا", "هذه", "the", "and", "for", "with",
+            "what", "when", "where", "how", "why", "about", "latest", "news",
+            "search", "find", "tell", "please"
+        }
+        meaningful = [w for w in words if w not in stopwords and len(w) > 2]
         if not meaningful:
             return True
-        return any(w in haystack for w in meaningful)
+        matched = sum(1 for w in meaningful if w in haystack)
+        threshold = 1 if len(meaningful) <= 2 else max(2, (len(meaningful) + 1) // 2)
+        return matched >= threshold
 
     def add_results(items, require_date=False):
         batch = []
@@ -310,8 +320,12 @@ def search_web(query):
                 try:
                     page = extractor.extract(item["url"], fmt="text_plain")
                     body = page.get("content", "") if isinstance(page, dict) else ""
-                    body = re.sub(r"\\s+", " ", str(body)).strip()
-                    if len(body) >= 500:
+                    body = re.sub(r"\s+", " ", str(body)).strip()
+                    # Avoid treating boilerplate/consent pages as useful evidence.
+                    title_terms = [w.lower() for w in re.findall(r"[\w\u0600-\u06ff]+", item.get("title", "")) if len(w) > 3]
+                    page_lower = body.lower()
+                    overlap = sum(1 for w in set(title_terms) if w in page_lower)
+                    if len(body) >= 500 and (not title_terms or overlap >= min(2, len(set(title_terms)))):
                         item["page_text"] = body[:1800]
                         item["page_extracted"] = True
                         extracted_domains.add(urlparse(item["url"]).netloc.lower().removeprefix("www."))
@@ -419,7 +433,7 @@ def format_search_results(search_context):
         payload = json.loads(search_context.split("SEARCH_JSON=", 1)[1])
         read_count = int(payload.get("pages_read", 0))
         domain_count = int(payload.get("independent_domains_read", 0))
-        note += f"\\n\\n**حدود التحقق:** تم استخراج نص {read_count} صفحة من النتائج الأولى. هذا لا يعني أن كل ادعاء تأكد من مصدر مستقل؛ عدد النطاقات التي أمكن قراءة صفحاتها: {domain_count}."
+        note += f"\\n\\n**حالة التحقق:** تم استخراج نص {read_count} صفحة من النتائج الأولى، من {domain_count} نطاق مستقل. هذه قراءة للمحتوى وليست تصديقًا تلقائيًا على صحته؛ إذا لم تتفق مصادر مستقلة، يجب عرض الاختلاف بدل الجزم."
     except Exception:
         pass
     return "## نتائج البحث\\n\\n" + "\\n\\n".join(output) + note
