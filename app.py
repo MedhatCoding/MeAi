@@ -175,55 +175,76 @@ def extract_file(upload):
     return f"الملف {upload.name}: هذا الإصدار لا يحلل الصور بعد. نحتاج نموذجًا يدعم الصور."
 
 def search_web(query):
-    """Search several engines, then Google News RSS; return structured records."""
+    """Search news-first for current-events queries and preserve only useful source metadata."""
     query = (query or "").strip()
     if not query:
         return "SEARCH_STATUS=FAILED\nلم يُحدَّد استعلام للبحث."
+    news_intent = bool(re.search(
+        r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking|البورصة|أسعار اليوم)",
+        query, re.I
+    ))
     errors, collected = [], []
+
+    def add_results(items, require_date=False):
+        batch = []
+        for item in items:
+            href = (item.get("url") or item.get("href") or "").strip()
+            title = (item.get("title") or "").strip()
+            date = (item.get("date") or item.get("published") or "").strip()
+            if title and href.startswith(("https://", "http://")) and (not require_date or date):
+                batch.append({
+                    "title": title, "url": href,
+                    "snippet": (item.get("body") or item.get("snippet") or "").strip(),
+                    "date": date, "source": (item.get("source") or "").strip()
+                })
+        return batch
+
+    # Try dated news sources first for news/current-events queries.
     try:
         from ddgs import DDGS
-        # News queries must use the news endpoint first: ordinary text results rarely
-        # carry publication dates, which caused "latest news" to appear undated.
-        news_intent = bool(re.search(r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking)", query, re.I))
-        modes = (("news", ("bing", "duckduckgo", "auto")), ("text", ("bing", "brave", "duckduckgo", "google", "auto"))) if news_intent else (("text", ("bing", "brave", "duckduckgo", "google", "auto")), ("news", ("bing", "duckduckgo", "auto")))
-        for mode, backends in modes:
+        plans = (("news", ("bing", "duckduckgo", "auto")), ("text", ("bing", "brave", "duckduckgo", "google", "auto"))) if news_intent else (("text", ("bing", "brave", "duckduckgo", "google", "auto")), ("news", ("bing", "duckduckgo", "auto")))
+        for mode, backends in plans:
             for backend in backends:
                 try:
                     client = DDGS(timeout=12)
-                    results = list(client.news(query, max_results=8, backend=backend, timelimit="w") if mode == "news" and news_intent else client.news(query, max_results=8, backend=backend) if mode == "news" else client.text(query, max_results=8, backend=backend))
-                    batch = []
-                    for item in results:
-                        href = (item.get("url") or item.get("href") or "").strip()
-                        title = (item.get("title") or "").strip()
-                        if title and href.startswith(("https://", "http://")):
-                            batch.append({"title": title, "url": href, "snippet": (item.get("body") or item.get("snippet") or "").strip(), "date": (item.get("date") or item.get("published") or "").strip(), "source": (item.get("source") or "").strip()})
-                    # Prefer a dated news batch over generic snippets when dates are available.
-                    if mode == "news" and any(x["date"] for x in batch):
+                    if mode == "news":
+                        try:
+                            results = list(client.news(query, max_results=10, backend=backend, timelimit="w" if news_intent else None))
+                        except TypeError:
+                            results = list(client.news(query, max_results=10, backend=backend))
+                    else:
+                        results = list(client.text(query, max_results=8, backend=backend))
+                    batch = add_results(results, require_date=(news_intent and mode == "news"))
+                    if batch:
                         collected.extend(batch)
-                    elif not collected and batch:
-                        collected.extend(batch)
-                    if collected: break
+                        break
                 except Exception as exc:
                     errors.append(f"{mode}/{backend}: {type(exc).__name__}: {str(exc)[:70]}")
-            if collected: break
+            if collected:
+                break
     except Exception as exc:
         errors.append(f"DDGS: {type(exc).__name__}: {str(exc)[:100]}")
+
+    # Google News RSS is a fallback; RSS publication timestamps are parsed and kept.
     if not collected:
         try:
             import xml.etree.ElementTree as ET
             from urllib.parse import quote
-            rss_url = "https://news.google.com/rss/search?q=" + quote(query) + "&hl=ar&gl=EG&ceid=EG:ar"
+            rss_url = "https://news.google.com/rss/search?q=" + quote(query + (" when:7d" if news_intent else "")) + "&hl=ar&gl=EG&ceid=EG:ar"
             response = requests.get(rss_url, headers={"User-Agent": "Mozilla/5.0 MedhatAI/1.0"}, timeout=15)
             response.raise_for_status()
             root = ET.fromstring(response.content)
-            for item in root.findall(".//item")[:8]:
-                title, href = (item.findtext("title") or "").strip(), (item.findtext("link") or "").strip()
-                sn = item.find("source")
-                source = (sn.text or "").strip() if sn is not None else ""
-                if title and href.startswith(("https://", "http://")):
-                    collected.append({"title": title, "url": href, "snippet": "", "date": (item.findtext("pubDate") or "").strip(), "source": source})
+            for item in root.findall(".//item")[:12]:
+                title = (item.findtext("title") or "").strip()
+                href = (item.findtext("link") or "").strip()
+                source_node = item.find("source")
+                source = (source_node.text or "").strip() if source_node is not None else ""
+                date = (item.findtext("pubDate") or "").strip()
+                if title and href.startswith(("https://", "http://")) and (not news_intent or date):
+                    collected.append({"title": title, "url": href, "snippet": "", "date": date, "source": source})
         except Exception as exc:
             errors.append(f"Google News RSS: {type(exc).__name__}: {str(exc)[:100]}")
+
     unique, seen = [], set()
     for item in collected:
         key = item["url"].split("?")[0].rstrip("/")
@@ -231,11 +252,18 @@ def search_web(query):
             seen.add(key)
             unique.append(item)
     if unique:
-        return "SEARCH_STATUS=OK\nSEARCH_JSON=" + json.dumps({"query": query, "results": unique[:8]}, ensure_ascii=False)
-    return "SEARCH_STATUS=FAILED\nتعذر الوصول إلى نتائج البحث عبر محركات البحث وGoogle News RSS. لن أعرض أخبارًا أو روابط غير متحققة. " + " | ".join(errors[:5])
+        return "SEARCH_STATUS=OK\nSEARCH_JSON=" + json.dumps(
+            {"query": query, "news_intent": news_intent, "results": unique[:10]}, ensure_ascii=False
+        )
+    if news_intent:
+        reason = "لم أجد أخبارًا حديثة لها تاريخ نشر واضح. لم أعرض صفحات رئيسية أو نتائج بلا تاريخ على أنها أخبار."
+    else:
+        reason = "تعذر الوصول إلى نتائج بحث موثوقة."
+    return "SEARCH_STATUS=FAILED\n" + reason + " لن أعرض أخبارًا أو روابط غير متحققة. " + " | ".join(errors[:4])
+
 
 def format_search_results(search_context):
-    """Render source URLs directly so the language model cannot corrupt them."""
+    """Format source URLs directly; never imply undated pages are recent news."""
     try:
         payload = json.loads(search_context.split("SEARCH_JSON=", 1)[1])
         results = payload.get("results", [])
@@ -245,34 +273,55 @@ def format_search_results(search_context):
     from datetime import timedelta, timezone
     from urllib.parse import urlparse
     now = datetime.now(timezone.utc)
-    recent = bool(re.search(r"(آخر|اخر|last)\s*7\s*(أيام|ايام|days)", payload.get("query", "").lower()))
-    output, verified_dates = [], 0
+    query = payload.get("query", "")
+    news_intent = bool(payload.get("news_intent")) or bool(re.search(
+        r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking|البورصة|أسعار اليوم)",
+        query, re.I
+    ))
+    recent = news_intent or bool(re.search(r"(آخر|اخر|last)\s*7\s*(أيام|ايام|days)", query.lower()))
+    output, dated_count = [], 0
     for item in results:
-        raw_date = item.get("date", "")
+        raw_date = (item.get("date") or "").strip()
         dt = None
         if raw_date:
             try:
                 dt = parsedate_to_datetime(raw_date)
-                if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
                 dt = dt.astimezone(timezone.utc)
             except Exception:
                 try:
                     dt = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-                    if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
                     dt = dt.astimezone(timezone.utc)
                 except Exception:
                     dt = None
-        if recent and dt and not (now - timedelta(days=7) <= dt <= now + timedelta(hours=12)):
-            continue
-        if recent and dt: verified_dates += 1
+        if recent:
+            if not dt:
+                continue
+            if not (now - timedelta(days=7) <= dt <= now + timedelta(hours=12)):
+                continue
+            dated_count += 1
         host = urlparse(item["url"]).netloc
-        date_label = dt.strftime("%Y-%m-%d") if dt else (raw_date or "غير متاح")
+        date_label = dt.strftime("%Y-%m-%d %H:%M UTC") if dt else (raw_date or "غير متاح")
         snippet = re.sub(r"\s+", " ", item.get("snippet", "")).strip()
-        output.append(f"### {len(output)+1}. {item['title']}\n- **المصدر:** {item.get('source') or host}\n- **تاريخ النشر:** {date_label}\n- **الرابط:** [{host}]({item['url']})\n- **الملخص:** {snippet if snippet else 'المقتطف غير كافٍ لكتابة ملخص موثوق؛ افتح الرابط للتفاصيل.'}")
-        if len(output) >= 5: break
+        output.append(
+            f"### {len(output)+1}. {item['title']}\n"
+            f"- **المصدر:** {item.get('source') or host}\n"
+            f"- **تاريخ النشر:** {date_label}\n"
+            f"- **الرابط:** [{host}]({item['url']})\n"
+            f"- **الملخص:** {snippet if snippet else 'المقتطف غير كافٍ لكتابة ملخص موثوق؛ افتح رابط الخبر للتفاصيل.'}"
+        )
+        if len(output) >= 5:
+            break
     if not output:
-        return "لم أجد نتائج يمكن التحقق من أنها منشورة خلال آخر 7 أيام؛ لن أعرض أخبارًا أقدم على أنها حديثة."
-    note = "\n\n**تنبيه:** لم تتوفر تواريخ نشر موثوقة لخمسة أخبار ضمن آخر 7 أيام. راجع أي نتيجة تاريخها «غير متاح» قبل الاعتماد عليها." if recent and verified_dates < 5 else ""
+        if recent:
+            return "لم أجد نتائج يمكن التحقق من تاريخ نشرها خلال آخر 7 أيام. استبعدت الصفحات العامة والنتائج غير المؤرخة بدلًا من عرضها كأخبار حديثة."
+        return "لم أجد نتائج قابلة للعرض."
+    note = ""
+    if recent and dated_count < 5:
+        note = "\n\n**تنبيه:** عُرضت الأخبار التي أمكن التحقق من تاريخها فقط؛ قد يكون عدد النتائج أقل من خمسة."
     return "## نتائج البحث\n\n" + "\n\n".join(output) + note
 
 def _provider_configs():
