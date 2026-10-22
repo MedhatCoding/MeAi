@@ -1005,11 +1005,13 @@ elif page == "توليد الصور":
 elif page == "توليد الفيديو":
     st.title("🎬 توليد الفيديو")
     st.write("حوّل وصفًا نصيًا إلى مقطع فيديو باستخدام Hugging Face Inference Providers عند إعداد مفتاح يدعم مزوّد الفيديو.")
-    st.info("توليد الفيديو قد يستهلك رصيدًا لدى المزوّد. لن يتم إرسال الطلب إلا بعد الضغط على زر الإنشاء، وقد تختلف الإتاحة والأسعار حسب النموذج والمزوّد.")
+    st.info("توليد الفيديو قد يستهلك رصيدًا لدى المزوّد. يلزم مفتاح Hugging Face بصلاحية Inference Providers، وقد يتطلب المزوّد رصيدًا مدفوعًا. لن يُرسل الطلب إلا عند الضغط على زر الإنشاء.")
+    st.markdown("إذا لم تضف المفتاح إلى Secrets، يمكنك إدخاله مؤقتًا هنا. لا تحفظه في المستودع ولا ترسله في المحادثات.")
     with st.form("video_generation_form"):
         video_prompt = st.text_area("وصف المشهد", placeholder="مشهد سينمائي واقعي لشوارع القاهرة وقت الغروب، حركة كاميرا بطيئة، إضاءة ذهبية، تفاصيل واضحة...", height=130, max_chars=1800)
         video_model = st.text_input("معرّف النموذج", value=secret("HF_VIDEO_MODEL", "Wan-AI/Wan2.2-TI2V-5B"))
         video_negative = st.text_input("عناصر يجب تجنبها (اختياري)", value="low quality, flicker, distorted objects")
+        video_token_input = st.text_input("HF Token (اختياري إذا لم تضفه إلى Secrets)", type="password", help="يلزم رمز Hugging Face بصلاحية Make calls to Inference Providers. يُستخدم لهذا الطلب فقط ولا يُحفظ في قاعدة البيانات.")
         generate_video = st.form_submit_button("إنشاء الفيديو", type="primary", use_container_width=True)
     if generate_video:
         if not video_prompt.strip():
@@ -1018,7 +1020,7 @@ elif page == "توليد الفيديو":
             try:
                 from video_tools import generate_video as make_video
                 with st.spinner("جاري إرسال الطلب إلى مزوّد الفيديو؛ قد يستغرق عدة دقائق..."):
-                    video_bytes, provider_label = make_video(video_prompt.strip(), model=video_model.strip(), negative_prompt=video_negative.strip())
+                    video_bytes, provider_label = make_video(video_prompt.strip(), model=video_model.strip(), negative_prompt=video_negative.strip(), api_key=video_token_input.strip() or None)
                 st.session_state["last_generated_video"] = video_bytes
                 st.session_state["last_generated_video_model"] = provider_label
                 st.success("تم إنشاء الفيديو بنجاح عبر "+provider_label)
