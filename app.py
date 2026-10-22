@@ -433,7 +433,45 @@ def format_search_results(search_context):
         payload = json.loads(search_context.split("SEARCH_JSON=", 1)[1])
         read_count = int(payload.get("pages_read", 0))
         domain_count = int(payload.get("independent_domains_read", 0))
-        note += f"\\n\\n**حالة التحقق:** تم استخراج نص {read_count} صفحة من النتائج الأولى، من {domain_count} نطاق مستقل. هذه قراءة للمحتوى وليست تصديقًا تلقائيًا على صحته؛ إذا لم تتفق مصادر مستقلة، يجب عرض الاختلاف بدل الجزم."
+        note += f"\\n\\n**حالة التحقق:** تمت قراءة {read_count} صفحة من النتائج الأولى عبر {domain_count} نطاق مستقل. قراءة الصفحة لا تعني صحة المعلومة؛ لذلك لا نصف النتيجة بأنها مؤكدة دون أدلة مستقلة."
+        # General cross-source comparison: compare recurring meaningful terms only
+        # across extracted pages from different domains; this is a signal, not fact-checking.
+        from collections import defaultdict
+        domain_terms = defaultdict(set)
+        stopwords = {
+            "التي","الذي","هذا","هذه","ذلك","هناك","على","إلى","الى","عن","من","في","مع","كان","كانت",
+            "يكون","يمكن","حيث","بعد","قبل","بين","عند","أكثر","أقل","أيضا","كما","لكن","لذلك","وهو",
+            "the","and","for","with","from","that","this","have","has","was","were","are","you","your",
+            "into","about","after","before","than","then","their","they","will","would","could","should",
+            "source","read","page","news","latest","update"
+        }
+        for item in results:
+            body = (item.get("page_text") or item.get("snippet") or "")
+            host = urlparse(item.get("url", "")).netloc.lower().removeprefix("www.")
+            parts = host.split(".")
+            domain = ".".join(parts[-2:]) if len(parts) >= 2 else host
+            terms = {
+                w.lower() for w in re.findall(r"[\\w\\u0600-\\u06ff]+", body)
+                if len(w) > 3 and w.lower() not in stopwords
+            }
+            if domain and terms:
+                domain_terms[domain].update(terms)
+        if len(domain_terms) >= 2:
+            counts = defaultdict(int)
+            for terms in domain_terms.values():
+                for term in terms:
+                    counts[term] += 1
+            recurring = sorted(
+                ((term, count) for term, count in counts.items() if count >= 2),
+                key=lambda pair: (-pair[1], pair[0])
+            )[:8]
+            if recurring:
+                terms_label = "، ".join(term for term, _ in recurring)
+                note += f"\\n\\n**مقارنة أولية بين المصادر:** ظهرت كلمات/موضوعات مشتركة عبر نطاقات مختلفة: {terms_label}. هذا تشابه موضوعي فقط وليس إثباتًا لصحة الادعاءات؛ راجع النصوص والروابط، وأي أرقام أو تواريخ متعارضة تحتاج تحققًا مستقلًا."
+            else:
+                note += "\\n\\n**مقارنة المصادر:** لم يظهر تداخل نصي كافٍ بين صفحات مستقلة؛ لا يمكن استنتاج اتفاق المصادر من النتائج الحالية."
+        else:
+            note += "\\n\\n**مقارنة المصادر:** يلزم وجود صفحتين مقروءتين على الأقل من نطاقين مستقلين؛ لا تُعدّ إعادة نشر الخبر من النطاق نفسه مصدرًا مستقلًا."
     except Exception:
         pass
     return "## نتائج البحث\\n\\n" + "\\n\\n".join(output) + note
