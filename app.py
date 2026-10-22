@@ -179,8 +179,14 @@ def search_web(query):
     query = (query or "").strip()
     if not query:
         return "SEARCH_STATUS=FAILED\nلم يُحدَّد استعلام للبحث."
+    # Detect both news intent and the subject to avoid broad results (e.g. generic
+    # Reuters science headlines) for a specific market such as the Egyptian Exchange.
     news_intent = bool(re.search(
         r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking|البورصة|أسعار اليوم)",
+        query, re.I
+    ))
+    egx_intent = bool(re.search(
+        r"(البورصة المصرية|البورصة|البورصة\s*المصري|EGX|EGX30|EGX33|EGX70|EGX100|egyptian exchange|egyptian stock market)",
         query, re.I
     ))
     errors, collected = [], []
@@ -196,6 +202,13 @@ def search_web(query):
             # For current-news searches, discard bare domain homepages even if an
             # engine mistakenly attaches a date to them. They are not individual stories.
             has_article_path = bool(parsed and parsed.path.strip("/") and parsed.path.strip("/") not in {"news", "latest", "home", "homepage"})
+            title_and_snippet = (title + " " + (item.get("body") or item.get("snippet") or "")).lower()
+            # Require meaningful subject overlap for specific market queries. This
+            # prevents unrelated news categories from being presented as EGX news.
+            if egx_intent:
+                subject_terms = ("egx", "egypt", "egyptian", "بورصة", "البورصة", "أسهم", "اسهم", "مؤشر", "مصري", "المصرية", "مصريه", "شركات", "سوق المال", "stock market", "shares", "market index", "tadawul")
+                if not any(term in title_and_snippet for term in subject_terms):
+                    continue
             if title and parsed and (not require_date or (date and has_article_path)):
                 batch.append({
                     "title": title, "url": href,
@@ -239,12 +252,17 @@ def search_web(query):
             response = requests.get(rss_url, headers={"User-Agent": "Mozilla/5.0 MedhatAI/1.0"}, timeout=15)
             response.raise_for_status()
             root = ET.fromstring(response.content)
-            for item in root.findall(".//item")[:12]:
+            for item in root.findall(".//item")[:30]:
                 title = (item.findtext("title") or "").strip()
                 href = (item.findtext("link") or "").strip()
                 source_node = item.find("source")
                 source = (source_node.text or "").strip() if source_node is not None else ""
                 date = (item.findtext("pubDate") or "").strip()
+                if egx_intent:
+                    subject_text = (title + " " + source).lower()
+                    subject_terms = ("egx", "egypt", "egyptian", "بورصة", "البورصة", "أسهم", "اسهم", "مؤشر", "مصري", "المصرية", "شركات", "سوق المال", "stock market", "shares")
+                    if not any(term in subject_text for term in subject_terms):
+                        continue
                 if title and href.startswith(("https://", "http://")) and (not news_intent or date):
                     collected.append({"title": title, "url": href, "snippet": "", "date": date, "source": source})
         except Exception as exc:
@@ -284,8 +302,17 @@ def format_search_results(search_context):
         query, re.I
     ))
     recent = news_intent or bool(re.search(r"(آخر|اخر|last)\s*7\s*(أيام|ايام|days)", query.lower()))
+    egx_intent = bool(re.search(
+        r"(البورصة المصرية|البورصة|EGX|EGX30|EGX33|EGX70|EGX100|egyptian exchange|egyptian stock market)",
+        query, re.I
+    ))
     output, dated_count = [], 0
     for item in results:
+        if egx_intent:
+            subject_text = (item.get("title", "") + " " + item.get("snippet", "") + " " + item.get("source", "")).lower()
+            subject_terms = ("egx", "egypt", "egyptian", "بورصة", "البورصة", "أسهم", "اسهم", "مؤشر", "مصري", "المصرية", "شركات", "سوق المال", "stock market", "shares", "market index")
+            if not any(term in subject_text for term in subject_terms):
+                continue
         raw_date = (item.get("date") or "").strip()
         dt = None
         if raw_date:
