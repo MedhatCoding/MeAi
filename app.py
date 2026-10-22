@@ -175,13 +175,13 @@ def extract_file(upload):
     return f"الملف {upload.name}: هذا الإصدار لا يحلل الصور بعد. نحتاج نموذجًا يدعم الصور."
 
 def search_web(query):
-    """Search for relevant, dated articles; never substitute generic homepages."""
+    """General web search with relevance filtering, deduplication and dated-news safeguards."""
     query = (query or "").strip()
     if not query:
         return "SEARCH_STATUS=FAILED\nلم يُحدَّد استعلام للبحث."
 
     news_intent = bool(re.search(
-        r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking|البورصة|أسعار اليوم)",
+        r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking|اليوم|هذا الأسبوع|الأسبوع الحالي)",
         query, re.I
     ))
     egx_intent = bool(re.search(
@@ -189,38 +189,36 @@ def search_web(query):
         query, re.I
     ))
     errors, collected = [], []
+    from urllib.parse import urlparse, quote
 
-    # Use multiple narrow queries for EGX requests; a single broad query often
-    # returns unrelated global headlines. Keep the user query as a required anchor.
     queries = [query]
     if egx_intent:
         queries = [
-            '"البورصة المصرية" أخبار',
-            'EGX Egypt stock market news',
-            'البورصة المصرية أسهم شركات',
+            query,
+            '"البورصة المصرية" أسهم أخبار',
+            'EGX Egypt stock market',
         ]
 
-    from urllib.parse import urlparse
-    egypt_terms = (
-        "egx", "egypt", "egyptian", "مصر", "المصري", "المصرية",
-        "المصريه", "القاهرة", "القاهره", "egyptian exchange"
-    )
-    market_terms = (
-        "بورصة", "البورصة", "أسهم", "اسهم", "سهم", "مؤشر", "سوق المال",
-        "stock", "stocks", "shares", "equities", "market index", "exchange"
-    )
+    egypt_terms = ("egx", "egypt", "egyptian", "مصر", "المصري", "المصرية", "المصريه", "القاهرة", "القاهره", "egyptian exchange")
+    market_terms = ("بورصة", "البورصة", "أسهم", "اسهم", "سهم", "مؤشر", "سوق المال", "stock", "stocks", "shares", "equities", "market index", "exchange")
 
-    def is_relevant_egx(text, url=""):
+    def is_relevant(text, url=""):
         text = (text or "").lower()
         host = urlparse(url).netloc.lower() if url else ""
-        # Official Egyptian Exchange URLs are direct evidence of relevance.
-        if host.endswith("egx.com.eg"):
+        if egx_intent:
+            if host.endswith("egx.com.eg"):
+                return True
+            return any(t in text for t in egypt_terms) and any(t in text for t in market_terms)
+        # For general queries, require a meaningful overlap with the user's terms.
+        # Ignore very short/common tokens so unrelated popular results don't pass.
+        words = [w.lower() for w in re.findall(r"[\w\u0600-\u06ff]+", query) if len(w) > 2]
+        if not words:
             return True
-        # Require both Egypt/EGX context and a market-specific term. Generic
-        # words like "company", "market", or "Egypt" alone are insufficient.
-        has_egypt = any(term in text for term in egypt_terms)
-        has_market = any(term in text for term in market_terms)
-        return has_egypt and has_market
+        haystack = text.lower()
+        meaningful = [w for w in words if w not in {"ابحث", "الإنترنت", "الانترنت", "معلومات", "اعطني", "اذكر", "latest", "news", "search", "about", "find"}]
+        if not meaningful:
+            return True
+        return any(w in haystack for w in meaningful)
 
     def add_results(items, require_date=False):
         batch = []
@@ -233,15 +231,12 @@ def search_web(query):
             if not title or not parsed or not parsed.netloc:
                 continue
             path = parsed.path.strip("/").lower()
-            # Reject homepage/category/search pages: require a specific article URL.
-            if not path or path in {"news", "latest", "home", "homepage", "markets", "business"}:
+            if not path or path in {"news", "latest", "home", "homepage", "markets", "business", "search"}:
                 continue
             if require_date and not date:
                 continue
-            if egx_intent:
-                relevance_text = title + " " + snippet
-                if not is_relevant_egx(relevance_text, href):
-                    continue
+            if not is_relevant(title + " " + snippet, href):
+                continue
             batch.append({
                 "title": title, "url": href, "snippet": snippet,
                 "date": date, "source": (item.get("source") or parsed.netloc).strip()
@@ -250,36 +245,33 @@ def search_web(query):
 
     try:
         from ddgs import DDGS
-        # News-specific engine results first. Don't let generic text results
-        # masquerade as dated news if the news backend fails.
         for q in queries:
             try:
                 client = DDGS(timeout=12)
-                results = list(client.news(
-                    q, max_results=15, backend="auto",
-                    timelimit="w" if news_intent else None,
-                    region="wt-wt"
-                ))
-                batch = add_results(results, require_date=news_intent)
-                collected.extend(batch)
+                if news_intent:
+                    try:
+                        results = list(client.news(q, max_results=15, backend="auto", timelimit="w", region="xa-ar"))
+                    except TypeError:
+                        results = list(client.news(q, max_results=15, backend="auto", region="xa-ar"))
+                    collected.extend(add_results(results, require_date=True))
+                else:
+                    results = list(client.text(q, max_results=12, backend="auto", region="xa-ar"))
+                    collected.extend(add_results(results))
             except Exception as exc:
-                errors.append(f"DDGS news: {type(exc).__name__}: {str(exc)[:80]}")
-            if len(collected) >= 5:
+                errors.append(f"DDGS: {type(exc).__name__}: {str(exc)[:80]}")
+            if len(collected) >= 8:
                 break
     except Exception as exc:
         errors.append(f"DDGS: {type(exc).__name__}: {str(exc)[:80]}")
 
-    # Google News RSS is the fallback, and each query is independently filtered.
-    if len(collected) < 3:
+    # Google News RSS is reserved for news queries; ordinary informational
+    # searches use DDGS text results rather than turning every query into news.
+    if news_intent and len(collected) < 3:
         try:
             import xml.etree.ElementTree as ET
-            from urllib.parse import quote
             for q in queries:
-                rss_query = q + (" when:7d" if news_intent else "")
-                rss_url = "https://news.google.com/rss/search?q=" + quote(rss_query) + "&hl=ar&gl=EG&ceid=EG:ar"
-                response = requests.get(
-                    rss_url, headers={"User-Agent": "Mozilla/5.0 MedhatAI/1.0"}, timeout=15
-                )
+                rss_url = "https://news.google.com/rss/search?q=" + quote(q + " when:7d") + "&hl=ar&gl=EG&ceid=EG:ar"
+                response = requests.get(rss_url, headers={"User-Agent": "Mozilla/5.0 MedhatAI/1.0"}, timeout=15)
                 response.raise_for_status()
                 root = ET.fromstring(response.content)
                 for item in root.findall(".//item")[:20]:
@@ -288,16 +280,13 @@ def search_web(query):
                     source_node = item.find("source")
                     source = (source_node.text or "").strip() if source_node is not None else ""
                     date = (item.findtext("pubDate") or "").strip()
-                    if not title or not href.startswith(("https://", "http://")) or (news_intent and not date):
+                    if not title or not href.startswith(("https://", "http://")) or not date:
                         continue
-                    parsed = urlparse(href)
-                    relevance_text = (title + " " + source).lower()
-                    if egx_intent and not any(term in relevance_text for term in subject_terms):
+                    if not is_relevant(title + " " + source, href):
                         continue
-                    # Google News links are article redirects, not the publisher homepage.
                     collected.append({
                         "title": title, "url": href, "snippet": "",
-                        "date": date, "source": source or parsed.netloc
+                        "date": date, "source": source or urlparse(href).netloc
                     })
                 if len(collected) >= 5:
                     break
@@ -314,12 +303,10 @@ def search_web(query):
         return "SEARCH_STATUS=OK\nSEARCH_JSON=" + json.dumps(
             {"query": query, "news_intent": news_intent, "results": unique[:15]}, ensure_ascii=False
         )
-    reason = (
-        "لم أجد أخبارًا حديثة مرتبطة بالبورصة المصرية مع تاريخ نشر ورابط مقال يمكن التحقق منه. "
-        "لم أعرض أخبارًا عامة أو صفحات رئيسية على أنها نتائج."
-        if egx_intent else
-        "لم أجد نتائج حديثة لها تاريخ نشر واضح ورابط مقال محدد."
-    )
+    if news_intent:
+        reason = "لم أجد أخبارًا حديثة ذات صلة واضحة وتاريخ نشر ورابط مقال محدد؛ لم أعرض نتائج غير متحققة."
+    else:
+        reason = "لم أجد صفحات ذات صلة كافية بالسؤال. جرّب صياغة أكثر تحديدًا."
     return "SEARCH_STATUS=FAILED\n" + reason + " " + " | ".join(errors[:3])
 
 def format_search_results(search_context):
