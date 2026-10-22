@@ -32,7 +32,7 @@ def generate_video(prompt: str, *, model: str = "Wan-AI/Wan2.2-TI2V-5B", negativ
         client = InferenceClient(provider=_secret("HF_VIDEO_PROVIDER", "fal-ai"), api_key=token, timeout=240)
         kwargs = {"model": model}
         if negative_prompt:
-            kwargs["negative_prompt"] = negative_prompt[:500]
+            kwargs["negative_prompt"] = [negative_prompt[:500]]
         video = client.text_to_video(prompt, **kwargs)
         if hasattr(video, "read"):
             video = video.read()
