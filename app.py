@@ -266,48 +266,44 @@ def format_search_results(search_context):
     return "## نتائج البحث\n\n" + "\n\n".join(output) + note
 
 def _provider_configs():
-    """Return configured providers in priority order; missing credentials are skipped."""
+    """Configured text providers in failover order; unconfigured providers are skipped."""
     providers = []
-    # OpenRouter supports multiple free models, depending on current availability.
+    # Cloudflare Workers AI native REST endpoint (free daily allowance is limited).
+    cf_token = secret("CLOUDFLARE_API_TOKEN")
+    cf_account = secret("CLOUDFLARE_ACCOUNT_ID")
+    if cf_token and cf_account:
+        providers.append({
+            "name": "Cloudflare Workers AI",
+            "kind": "cloudflare",
+            "url": f"https://api.cloudflare.com/client/v4/accounts/{cf_account}/ai/run/{secret('CLOUDFLARE_CHAT_MODEL', '@cf/meta/llama-3.1-8b-instruct')}",
+            "key": cf_token,
+            "model": secret("CLOUDFLARE_CHAT_MODEL", "@cf/meta/llama-3.1-8b-instruct"),
+            "headers": {},
+        })
+    # OpenRouter supports multiple free models, subject to current model availability.
     key = secret("OPENROUTER_API_KEY") or secret("AI_API_KEY")
     if key:
         providers.append({
-            "name": "OpenRouter",
+            "name": "OpenRouter", "kind": "openai",
             "url": (secret("OPENROUTER_BASE_URL") or secret("AI_BASE_URL", "https://openrouter.ai/api/v1")).rstrip("/") + "/chat/completions",
-            "key": key,
-            "model": secret("OPENROUTER_MODEL") or secret("AI_MODEL", "openrouter/free"),
+            "key": key, "model": secret("OPENROUTER_MODEL") or secret("AI_MODEL", "openrouter/free"),
             "headers": {"HTTP-Referer": "https://github.com/", "X-Title": "Medhat AI Assistant"},
         })
-    # Groq OpenAI-compatible API; requires GROQ_API_KEY in Streamlit Secrets.
     key = secret("GROQ_API_KEY")
     if key:
-        providers.append({
-            "name": "Groq",
-            "url": "https://api.groq.com/openai/v1/chat/completions",
-            "key": key,
-            "model": secret("GROQ_MODEL", "llama-3.3-70b-versatile"),
-            "headers": {},
-        })
-    # Cerebras OpenAI-compatible API; requires CEREBRAS_API_KEY.
+        providers.append({"name": "Groq", "kind": "openai", "url": "https://api.groq.com/openai/v1/chat/completions", "key": key, "model": secret("GROQ_MODEL", "llama-3.3-70b-versatile"), "headers": {}})
     key = secret("CEREBRAS_API_KEY")
     if key:
-        providers.append({
-            "name": "Cerebras",
-            "url": "https://api.cerebras.ai/v1/chat/completions",
-            "key": key,
-            "model": secret("CEREBRAS_MODEL", "llama3.1-8b"),
-            "headers": {},
-        })
-    # Google Gemini native REST API; requires GEMINI_API_KEY or GOOGLE_API_KEY.
+        providers.append({"name": "Cerebras", "kind": "openai", "url": "https://api.cerebras.ai/v1/chat/completions", "key": key, "model": secret("CEREBRAS_MODEL", "llama3.1-8b"), "headers": {}})
     key = secret("GEMINI_API_KEY") or secret("GOOGLE_API_KEY")
     if key:
-        providers.append({
-            "name": "Google Gemini",
-            "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-            "key": key,
-            "model": secret("GEMINI_MODEL", "gemini-2.5-flash"),
-            "headers": {},
-        })
+        providers.append({"name": "Google Gemini", "kind": "openai", "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", "key": key, "model": secret("GEMINI_MODEL", "gemini-2.5-flash"), "headers": {}})
+    # Explicitly configured providers can be preferred; remaining providers stay as fallback.
+    preferred = secret("AI_PROVIDER", "auto").strip().lower()
+    aliases = {"cloudflare": "Cloudflare Workers AI", "openrouter": "OpenRouter", "groq": "Groq", "cerebras": "Cerebras", "gemini": "Google Gemini"}
+    if preferred in aliases:
+        first = aliases[preferred]
+        providers.sort(key=lambda p: p["name"] != first)
     return providers
 
 
@@ -315,31 +311,33 @@ def call_model(messages):
     providers = _provider_configs()
     if not providers:
         raise RuntimeError(
-            "لا يوجد مزوّد ذكاء اصطناعي مُعدّ بعد. التبديل التلقائي جاهز، لكنه يحتاج مفتاحًا واحدًا على الأقل "
-            "من مزوّد مدعوم في Secrets (OPENROUTER_API_KEY أو GROQ_API_KEY أو CEREBRAS_API_KEY أو GEMINI_API_KEY). "
-            "Supabase خاص بالذاكرة ولا يولّد الإجابات."
+            "لا يوجد مزوّد ذكاء اصطناعي مُعدّ. أضف بيانات Cloudflare (CLOUDFLARE_ACCOUNT_ID وCLOUDFLARE_API_TOKEN) "
+            "أو مفتاح مزوّد آخر في Streamlit Secrets. لا تضع المفاتيح في GitHub."
         )
     errors = []
     for provider in providers:
-        headers = {
-            "Authorization": f"Bearer {provider['key']}",
-            "Content-Type": "application/json",
-            **provider["headers"],
-        }
+        headers = {"Authorization": f"Bearer {provider['key']}", "Content-Type": "application/json", **provider["headers"]}
         try:
-            res = requests.post(
-                provider["url"],
-                headers=headers,
-                json={"model": provider["model"], "messages": messages, "temperature": 0.4},
-                timeout=90,
-            )
+            if provider["kind"] == "cloudflare":
+                # Workers AI REST API expects messages and returns result.response.
+                payload = {"messages": messages}
+                res = requests.post(provider["url"], headers=headers, json=payload, timeout=90)
+            else:
+                payload = {"model": provider["model"], "messages": messages, "temperature": 0.4}
+                res = requests.post(provider["url"], headers=headers, json=payload, timeout=90)
             if res.status_code >= 400:
                 errors.append(f"{provider['name']}: HTTP {res.status_code} — {res.text[:220]}")
                 continue
             data = res.json()
-            answer = data["choices"][0]["message"]["content"]
+            if provider["kind"] == "cloudflare":
+                answer = (data.get("result") or {}).get("response", "")
+                if not answer and data.get("success") is False:
+                    errors.append(f"{provider['name']}: {str(data.get('errors', []))[:180]}")
+                    continue
+            else:
+                answer = data["choices"][0]["message"]["content"]
             if isinstance(answer, list):
-                answer = "\\n".join(str(part.get("text", part)) if isinstance(part, dict) else str(part) for part in answer)
+                answer = "\n".join(str(part.get("text", part)) if isinstance(part, dict) else str(part) for part in answer)
             if not str(answer).strip():
                 errors.append(f"{provider['name']}: رد فارغ")
                 continue
@@ -667,7 +665,7 @@ elif page == "المهام":
 elif page == "توليد الصور":
     st.title("🎨 توليد الصور")
     st.write("اكتب وصفًا للصورة، وحدد المقاس والجودة، ثم أنشئ الصورة واحفظها على هاتفك.")
-    st.info("تحتاج هذه الميزة مفتاح OPENAI_API_KEY ورصيد API صالحًا. لا يوجد افتراض بأن التوليد مجاني، ولن يتم استدعاء الخدمة إلا عند الضغط على زر الإنشاء.")
+    st.info("اختيار مزوّد الصور من Secrets عبر IMAGE_PROVIDER. الوضع auto يجرّب Cloudflare أولًا ثم OpenAI عند إعداد كليهما. حصة Cloudflare محدودة، وOpenAI مدفوع؛ لن يُستدعَ أي مزوّد إلا عند الضغط على إنشاء.")
     with st.form("image_generation_form"):
         image_prompt = st.text_area(
             "وصف الصورة",
