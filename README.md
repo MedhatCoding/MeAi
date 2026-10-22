@@ -66,9 +66,9 @@ SUPABASE_SERVICE_ROLE_KEY = "YOUR_SERVER_SECRET_KEY"
 مرجع الأمان: https://supabase.com/docs/guides/getting-started/api-keys
 
 
-## توليد الصور (اختياري)
+## مزوّدو الذكاء الاصطناعي والتبديل التلقائي\n\nيمكن إعداد Cloudflare Workers AI للمحادثة وتوليد الصور، مع مزوّدات بديلة اختيارية. يجرّب التطبيق Cloudflare أولًا في الوضع `auto` ثم ينتقل إلى المزوّدات الأخرى التي أُعدّت مفاتيحها إذا فشل الطلب. التبديل لا يخلق مفاتيح API ولا يضمن أن كل مزوّد مجاني. حصة Workers AI المجانية محدودة يوميًا؛ راجع الأسعار والموديلات الرسمية قبل الاستخدام.\n\nفي Streamlit Cloud → App settings → Secrets أضف: \n\n```toml\nAI_PROVIDER = "auto"\nCLOUDFLARE_ACCOUNT_ID = "YOUR_ACCOUNT_ID"\nCLOUDFLARE_API_TOKEN = "YOUR_WORKERS_AI_TOKEN"\nCLOUDFLARE_CHAT_MODEL = "@cf/meta/llama-3.1-8b-instruct"\nCLOUDFLARE_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell"\nIMAGE_PROVIDER = "auto"\n```\n\nأنشئ رمزًا بصلاحية Workers AI Read/Write من لوحة Cloudflare. للمحادثة يمكن إضافة `OPENROUTER_API_KEY` أو `GROQ_API_KEY` أو `CEREBRAS_API_KEY` أو `GEMINI_API_KEY` كبدائل. اختر `AI_PROVIDER = "cloudflare"` لتفضيل Cloudflare أو اسم مزوّد آخر؛ الوضع `auto` يفضّل Cloudflare ثم بقية المزودين المُعدّين. لتوليد الصور، `IMAGE_PROVIDER` يقبل `auto` أو `cloudflare` أو `openai`.\n\n## توليد الصور (اختياري)
 
-أُضيفت صفحة **توليد الصور** داخل التطبيق. لتفعيلها من الهاتف، افتح إعدادات تطبيقك في Streamlit Community Cloud ثم Secrets وأضف:
+أُضيفت صفحة **توليد الصور** داخل التطبيق. يمكن استخدام Cloudflare FLUX.1 Schnell، أو OpenAI إذا أُعدّ مفتاحه:
 
 ```toml
 OPENAI_API_KEY = "YOUR_SERVER_KEY"
@@ -82,7 +82,7 @@ OPENAI_IMAGE_MODEL = "gpt-image-2"
 - المحادثة والبرمجة تعملان عبر مزود النص المُعدّ في Secrets.
 - البحث يحاول استخدام محركات خارجية وGoogle News RSS، وقد يفشل بسبب قيود الشبكة أو تغير المحركات؛ عند الفشل لا يعرض نتائج مختلقة.
 - الذاكرة دائمة عند إعداد Supabase بنجاح؛ وإلا فالتخزين المحلي مؤقت وقد يختفي.
-- توليد الصور يحتاج مفتاح API صالحًا ورصيدًا لدى المزود.
+- توليد الصور يدعم Cloudflare Workers AI وOpenAI مع اختيار مزوّد أو fallback تلقائي؛ حصة Cloudflare محدودة، وOpenAI مدفوع.
 - توليد الفيديو غير مفعّل في هذا الإصدار.
 - التحكم في مواقع وحسابات خارجية غير موصول تلقائيًا؛ كل تكامل يحتاج API أو موصلًا وصلاحيات آمنة واختبارًا فعليًا.
 - التطبيق لا يشغّل كودًا عشوائيًا؛ فحص Python الحالي فحص صياغة فقط. التشغيل الفعلي يحتاج بيئة تنفيذ معزولة منفصلة.
