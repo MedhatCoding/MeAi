@@ -187,11 +187,16 @@ def search_web(query):
 
     def add_results(items, require_date=False):
         batch = []
+        from urllib.parse import urlparse
         for item in items:
             href = (item.get("url") or item.get("href") or "").strip()
             title = (item.get("title") or "").strip()
             date = (item.get("date") or item.get("published") or "").strip()
-            if title and href.startswith(("https://", "http://")) and (not require_date or date):
+            parsed = urlparse(href) if href.startswith(("https://", "http://")) else None
+            # For current-news searches, discard bare domain homepages even if an
+            # engine mistakenly attaches a date to them. They are not individual stories.
+            has_article_path = bool(parsed and parsed.path.strip("/") and parsed.path.strip("/") not in {"news", "latest", "home", "homepage"})
+            if title and parsed and (not require_date or (date and has_article_path)):
                 batch.append({
                     "title": title, "url": href,
                     "snippet": (item.get("body") or item.get("snippet") or "").strip(),
