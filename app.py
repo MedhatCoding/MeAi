@@ -10,6 +10,7 @@ import requests
 import streamlit as st
 
 from agent_tools import list_workspace_files, read_workspace_file, write_workspace_file, validate_workspace_file
+from agent_runtime import execute_agent_actions
 
 APP_DIR = Path(__file__).parent
 # Streamlit Cloud may mount the repository as read-only; keep the temporary SQLite DB writable.
@@ -815,32 +816,48 @@ elif page == "الوكيل":
         else:
             with st.spinner("الوكيل يحلل المهمة ويجهز خطوات التنفيذ..."):
                 try:
-                    tool_policy = """أنت وكيل تنفيذ داخل تطبيق شخصي. أعد JSON صالحًا فقط بالشكل:
-{"summary":"ملخص","actions":[{"type":"write_file","path":"relative/path.py","purpose":"وصف قصير","content":"محتوى الملف الكامل"}],"checks":["فحص مطلوب"]}
-قواعد: أنشئ بحد أقصى 4 ملفات، امتدادات مسموحة فقط (.py,.md,.txt,.json,.csv,.yaml,.yml,.toml,.html,.css,.js,.ts,.sql,.xml,.sh,.ini)، لا مسارات مخفية أو ../، لا أسرار حقيقية، لا أوامر shell، لا تدّع تشغيل الكود. إذا كانت المهمة لا تحتاج ملفات أعد actions فارغة. اجعل المحتوى كاملًا وقابلًا للصيانة، وأضف اختبارات مناسبة عند طلبها."""
+                    tool_policy = """أنت وكيل تنفيذي داخل تطبيق شخصي يستخدم أدوات محدودة. أخرج JSON صالحًا فقط:
+{"summary":"ملخص المهمة","actions":[{"type":"search_web","query":"..."}],"checks":["معيار تحقق"]}
+الأدوات المسموحة: search_web(query)، list_files، read_file(path)، validate_file(path)، write_file(path,content).
+ضع من 1 إلى 6 إجراءات مرتبة. استخدم البحث لجمع معلومات حديثة عند الحاجة، ثم اقرأ الملفات ذات الصلة قبل تعديلها. لا تكتب ملفات إلا إذا طلبت المهمة ملفات وكان الوضع تنفيذًا. لا أوامر نظام أو تشغيل كود أو نشر أو إرسال أو شراء أو أسرار. المسارات نسبية فقط والامتدادات المسموحة يفرضها النظام. لا تدّع تنفيذ إجراء لم يُنفّذ. في وضع التخطيط فقط اقترح الإجراءات ولا تنفذها."""
                     response = call_model([
                         {"role":"system","content":tool_policy},
                         {"role":"user","content":"المهمة: "+agent_goal.strip()+"\nوضع التنفيذ: "+agent_mode+"\nأخرج JSON فقط."}
                     ])
-                    cleaned = re.sub(r"^\s*```(?:json)?\s*\n?", "", response.strip(), flags=re.I)
-                    cleaned = re.sub(r"\n?```\s*$", "", cleaned)
+                    cleaned = re.sub(r"^\\s*```(?:json)?\\s*\\n?", "", response.strip(), flags=re.I)
+                    cleaned = re.sub(r"\\n?```\\s*$", "", cleaned)
                     payload = json.loads(cleaned)
                     actions = payload.get("actions", [])
-                    if not isinstance(actions, list) or len(actions) > 4:
-                        raise ValueError("خطة الوكيل غير صالحة: الحد الأقصى أربعة ملفات.")
+                    if not isinstance(actions, list) or len(actions) > 6:
+                        raise ValueError("خطة الوكيل غير صالحة: الحد الأقصى ستة إجراءات.")
                     log = []
                     if agent_mode == "خطة فقط":
-                        log.append("وضع التخطيط فقط: لم تُكتب أي ملفات.")
+                        log.append("وضع التخطيط فقط: لم تُنفذ أي أداة أو تُكتب ملفات.")
                     else:
-                        for action in actions:
-                            if not isinstance(action, dict) or action.get("type") != "write_file":
-                                log.append("تم تخطي إجراء غير مسموح.")
-                                continue
-                            path = str(action.get("path", "")).strip()
-                            content = str(action.get("content", ""))
-                            saved = write_workspace_file(path, content)
-                            validation = validate_workspace_file(path)
-                            log.append(f"{path}: {'نجح الفحص' if validation.get('ok') else 'الفحص يحتاج مراجعة'} — {validation.get('message','')}")
+                        results = execute_agent_actions(
+                            actions,
+                            search_fn=search_web,
+                            allow_writes=bool(agent_confirm),
+                            max_actions=6,
+                        )
+                        for item in results:
+                            log.append(f"{item['action']}: {item['status']} — {item['message']}")
+                        # Give actual tool results back to the model for a grounded completion report.
+                        try:
+                            report = call_model([
+                                {"role":"system","content":"اكتب تقرير إنجاز عربيًا موجزًا ودقيقًا اعتمادًا فقط على النتائج الفعلية. ميّز بين النجاح والفشل وما لم يُنفذ، ولا تدّع تشغيل الكود."},
+                                {"role":"user","content":json.dumps({"goal":agent_goal,"tool_results":results},ensure_ascii=False)[:12000]}
+                            ])
+                            payload["summary"] = report.strip()[:3000] or payload.get("summary","")
+                        except Exception:
+                            pass
+                    st.session_state.agent_runs.insert(0, {
+                        "goal":agent_goal.strip(),"summary":str(payload.get("summary","")),
+                        "actions":actions if agent_mode != "خطة فقط" else [],
+                        "checks":payload.get("checks",[]),"log":log,
+                        "time":datetime.now().isoformat(timespec="minutes")
+                    })
+                    st.success("انتهت دورة الوكيل. راجع سجل الأدوات والنتائج الفعلية والملفات الناتجة.")
                     st.session_state.agent_runs.insert(0, {
                         "goal":agent_goal.strip(),"summary":str(payload.get("summary","")),
                         "actions":actions if agent_mode != "خطة فقط" else [],
