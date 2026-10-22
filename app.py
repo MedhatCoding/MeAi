@@ -858,13 +858,6 @@ elif page == "الوكيل":
                         "time":datetime.now().isoformat(timespec="minutes")
                     })
                     st.success("انتهت دورة الوكيل. راجع سجل الأدوات والنتائج الفعلية والملفات الناتجة.")
-                    st.session_state.agent_runs.insert(0, {
-                        "goal":agent_goal.strip(),"summary":str(payload.get("summary","")),
-                        "actions":actions if agent_mode != "خطة فقط" else [],
-                        "checks":payload.get("checks",[]),"log":log,
-                        "time":datetime.now().isoformat(timespec="minutes")
-                    })
-                    st.success("انتهت دورة الوكيل. راجع سجل التنفيذ والملفات الناتجة.")
                 except Exception as exc:
                     st.error(f"تعذر إكمال دورة الوكيل: {type(exc).__name__}: {str(exc)[:240]}")
     for idx, run in enumerate(st.session_state.agent_runs[:5]):
