@@ -346,8 +346,10 @@ def format_search_results(search_context):
     from urllib.parse import urlparse
     now = datetime.now(timezone.utc)
     query = payload.get("query", "")
+    # Do not classify every EGX question as news: "اشرح مؤشر EGX30"
+    # is informational, while explicit recency/news wording requires dated sources.
     news_intent = bool(payload.get("news_intent")) or bool(re.search(
-        r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking|البورصة|أسعار اليوم)",
+        r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking|اليوم|هذا الأسبوع|الأسبوع الحالي|أسعار اليوم)",
         query, re.I
     ))
     recent = news_intent or bool(re.search(r"(آخر|اخر|last)\s*7\s*(أيام|ايام|days)", query.lower()))
