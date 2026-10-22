@@ -408,7 +408,7 @@ def format_search_results(search_context):
         host = urlparse(item["url"]).netloc
         date_label = dt.strftime("%Y-%m-%d %H:%M UTC") if dt else (raw_date or "غير متاح")
         snippet = re.sub(r"\s+", " ", item.get("snippet", "")).strip()
-        page_text = re.sub(r"\\s+", " ", str(item.get("page_text", ""))).strip()
+        page_text = re.sub(r"\s+", " ", str(item.get("page_text", ""))).strip()
         if page_text:
             summary_line = f"- **من نص الصفحة المفتوحة (مقتطف):** {page_text[:900]}"
         else:
