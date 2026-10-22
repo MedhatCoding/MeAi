@@ -12,7 +12,7 @@ def _secret(name: str, default: str = "") -> str:
         return os.getenv(name, default)
 
 
-def generate_video(prompt: str, *, model: str = "Wan-AI/Wan2.2-TI2V-5B", negative_prompt: str = "") -> tuple[bytes, str]:
+def generate_video(prompt: str, *, model: str = "Wan-AI/Wan2.2-TI2V-5B", negative_prompt: str = "", api_key: str | None = None) -> tuple[bytes, str]:
     prompt = (prompt or "").strip()
     model = (model or "").strip()
     if not prompt:
@@ -21,9 +21,9 @@ def generate_video(prompt: str, *, model: str = "Wan-AI/Wan2.2-TI2V-5B", negativ
         raise ValueError("وصف الفيديو طويل جدًا؛ الحد 1800 حرف.")
     if not model or len(model) > 180:
         raise ValueError("معرّف النموذج غير صالح.")
-    token = _secret("HF_TOKEN") or _secret("HUGGINGFACEHUB_API_TOKEN")
+    token = (api_key or "").strip() or _secret("HF_TOKEN") or _secret("HUGGINGFACEHUB_API_TOKEN")
     if not token:
-        raise RuntimeError("أضف HF_TOKEN في Streamlit Secrets مع صلاحية Inference Providers. قد يتطلب مزوّد الفيديو رصيدًا مدفوعًا.")
+        raise RuntimeError("أدخل رمز Hugging Face في الحقل المخصص أو أضف HF_TOKEN إلى Streamlit Secrets. يجب أن يحمل الرمز صلاحية Make calls to Inference Providers. إنشاء الرمز من: https://huggingface.co/settings/tokens. قد يتطلب مزوّد الفيديو رصيدًا مدفوعًا.")
     try:
         from huggingface_hub import InferenceClient
     except ImportError as exc:
