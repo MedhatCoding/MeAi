@@ -300,14 +300,39 @@ def search_web(query):
             seen.add(key)
             unique.append(item)
     if unique:
-        return "SEARCH_STATUS=OK\nSEARCH_JSON=" + json.dumps(
-            {"query": query, "news_intent": news_intent, "results": unique[:15]}, ensure_ascii=False
+        # Read a bounded number of result pages to improve grounding without
+        # making every search slow or expensive.
+        extracted_domains = set()
+        try:
+            from ddgs import DDGS
+            extractor = DDGS(timeout=8)
+            for item in unique[:3]:
+                try:
+                    page = extractor.extract(item["url"], fmt="text_plain")
+                    body = page.get("content", "") if isinstance(page, dict) else ""
+                    body = re.sub(r"\\s+", " ", str(body)).strip()
+                    if len(body) >= 500:
+                        item["page_text"] = body[:1800]
+                        item["page_extracted"] = True
+                        extracted_domains.add(urlparse(item["url"]).netloc.lower().removeprefix("www."))
+                    else:
+                        item["page_extracted"] = False
+                except Exception:
+                    item["page_extracted"] = False
+        except Exception:
+            pass
+        return "SEARCH_STATUS=OK\\nSEARCH_JSON=" + json.dumps(
+            {
+                "query": query, "news_intent": news_intent, "results": unique[:15],
+                "pages_read": sum(1 for x in unique[:3] if x.get("page_extracted")),
+                "independent_domains_read": len(extracted_domains),
+            }, ensure_ascii=False
         )
     if news_intent:
         reason = "لم أجد أخبارًا حديثة ذات صلة واضحة وتاريخ نشر ورابط مقال محدد؛ لم أعرض نتائج غير متحققة."
     else:
         reason = "لم أجد صفحات ذات صلة كافية بالسؤال. جرّب صياغة أكثر تحديدًا."
-    return "SEARCH_STATUS=FAILED\n" + reason + " " + " | ".join(errors[:3])
+    return "SEARCH_STATUS=FAILED\\n" + reason + " " + " | ".join(errors[:3])
 
 def format_search_results(search_context):
     """Format source URLs directly; never imply undated pages are recent news."""
@@ -367,12 +392,17 @@ def format_search_results(search_context):
         host = urlparse(item["url"]).netloc
         date_label = dt.strftime("%Y-%m-%d %H:%M UTC") if dt else (raw_date or "غير متاح")
         snippet = re.sub(r"\s+", " ", item.get("snippet", "")).strip()
+        page_text = re.sub(r"\\s+", " ", str(item.get("page_text", ""))).strip()
+        if page_text:
+            summary_line = f"- **من نص الصفحة المفتوحة (مقتطف):** {page_text[:900]}"
+        else:
+            summary_line = f"- **المقتطف:** {snippet if snippet else 'تعذر استخراج نص المقال؛ لا يمكن تأكيد تفاصيله من صفحة المصدر.'}"
         output.append(
-            f"### {len(output)+1}. {item['title']}\n"
-            f"- **المصدر:** {item.get('source') or host}\n"
-            f"- **تاريخ النشر:** {date_label}\n"
-            f"- **الرابط:** [{host}]({item['url']})\n"
-            f"- **الملخص:** {snippet if snippet else 'المقتطف غير كافٍ لكتابة ملخص موثوق؛ افتح رابط الخبر للتفاصيل.'}"
+            f"### {len(output)+1}. {item['title']}\\n"
+            f"- **المصدر:** {item.get('source') or host}\\n"
+            f"- **تاريخ النشر:** {date_label}\\n"
+            f"- **الرابط:** [{host}]({item['url']})\\n"
+            f"{summary_line}"
         )
         if len(output) >= 5:
             break
@@ -382,8 +412,15 @@ def format_search_results(search_context):
         return "لم أجد نتائج قابلة للعرض."
     note = ""
     if recent and dated_count < 5:
-        note = "\n\n**تنبيه:** عُرضت الأخبار التي أمكن التحقق من تاريخها فقط؛ قد يكون عدد النتائج أقل من خمسة."
-    return "## نتائج البحث\n\n" + "\n\n".join(output) + note
+        note = "\\n\\n**تنبيه:** عُرضت الأخبار التي أمكن التحقق من تاريخها فقط؛ قد يكون عدد النتائج أقل من خمسة."
+    try:
+        payload = json.loads(search_context.split("SEARCH_JSON=", 1)[1])
+        read_count = int(payload.get("pages_read", 0))
+        domain_count = int(payload.get("independent_domains_read", 0))
+        note += f"\\n\\n**حدود التحقق:** تم استخراج نص {read_count} صفحة من النتائج الأولى. هذا لا يعني أن كل ادعاء تأكد من مصدر مستقل؛ عدد النطاقات التي أمكن قراءة صفحاتها: {domain_count}."
+    except Exception:
+        pass
+    return "## نتائج البحث\\n\\n" + "\\n\\n".join(output) + note
 
 def _provider_configs():
     """Configured text providers in failover order; unconfigured providers are skipped."""
