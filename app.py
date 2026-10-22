@@ -182,16 +182,26 @@ def search_web(query):
     errors, collected = [], []
     try:
         from ddgs import DDGS
-        for mode, backends in (("text", ("bing", "brave", "duckduckgo", "google", "auto")), ("news", ("bing", "duckduckgo", "auto"))):
+        # News queries must use the news endpoint first: ordinary text results rarely
+        # carry publication dates, which caused "latest news" to appear undated.
+        news_intent = bool(re.search(r"(خبر|أخبار|اخر الأخبار|آخر الأخبار|أحدث|عاجل|news|latest|breaking)", query, re.I))
+        modes = (("news", ("bing", "duckduckgo", "auto")), ("text", ("bing", "brave", "duckduckgo", "google", "auto"))) if news_intent else (("text", ("bing", "brave", "duckduckgo", "google", "auto")), ("news", ("bing", "duckduckgo", "auto")))
+        for mode, backends in modes:
             for backend in backends:
                 try:
                     client = DDGS(timeout=12)
-                    results = list(client.news(query, max_results=8, backend=backend)) if mode == "news" else list(client.text(query, max_results=8, backend=backend))
+                    results = list(client.news(query, max_results=8, backend=backend, timelimit="w") if mode == "news" and news_intent else client.news(query, max_results=8, backend=backend) if mode == "news" else client.text(query, max_results=8, backend=backend))
+                    batch = []
                     for item in results:
                         href = (item.get("url") or item.get("href") or "").strip()
                         title = (item.get("title") or "").strip()
                         if title and href.startswith(("https://", "http://")):
-                            collected.append({"title": title, "url": href, "snippet": (item.get("body") or item.get("snippet") or "").strip(), "date": (item.get("date") or item.get("published") or "").strip(), "source": (item.get("source") or "").strip()})
+                            batch.append({"title": title, "url": href, "snippet": (item.get("body") or item.get("snippet") or "").strip(), "date": (item.get("date") or item.get("published") or "").strip(), "source": (item.get("source") or "").strip()})
+                    # Prefer a dated news batch over generic snippets when dates are available.
+                    if mode == "news" and any(x["date"] for x in batch):
+                        collected.extend(batch)
+                    elif not collected and batch:
+                        collected.extend(batch)
                     if collected: break
                 except Exception as exc:
                     errors.append(f"{mode}/{backend}: {type(exc).__name__}: {str(exc)[:70]}")
