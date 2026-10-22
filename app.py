@@ -201,11 +201,26 @@ def search_web(query):
         ]
 
     from urllib.parse import urlparse
-    subject_terms = (
-        "egx", "egypt", "egyptian", "بورصة", "البورصة", "أسهم", "اسهم",
-        "مؤشر", "مصري", "المصرية", "شركات", "سوق المال", "stock market",
-        "shares", "market index", "egyptian exchange"
+    egypt_terms = (
+        "egx", "egypt", "egyptian", "مصر", "المصري", "المصرية",
+        "المصريه", "القاهرة", "القاهره", "egyptian exchange"
     )
+    market_terms = (
+        "بورصة", "البورصة", "أسهم", "اسهم", "سهم", "مؤشر", "سوق المال",
+        "stock", "stocks", "shares", "equities", "market index", "exchange"
+    )
+
+    def is_relevant_egx(text, url=""):
+        text = (text or "").lower()
+        host = urlparse(url).netloc.lower() if url else ""
+        # Official Egyptian Exchange URLs are direct evidence of relevance.
+        if host.endswith("egx.com.eg"):
+            return True
+        # Require both Egypt/EGX context and a market-specific term. Generic
+        # words like "company", "market", or "Egypt" alone are insufficient.
+        has_egypt = any(term in text for term in egypt_terms)
+        has_market = any(term in text for term in market_terms)
+        return has_egypt and has_market
 
     def add_results(items, require_date=False):
         batch = []
@@ -224,8 +239,8 @@ def search_web(query):
             if require_date and not date:
                 continue
             if egx_intent:
-                relevance_text = (title + " " + snippet + " " + (item.get("source") or "")).lower()
-                if not any(term in relevance_text for term in subject_terms):
+                relevance_text = title + " " + snippet
+                if not is_relevant_egx(relevance_text, href):
                     continue
             batch.append({
                 "title": title, "url": href, "snippet": snippet,
@@ -328,12 +343,17 @@ def format_search_results(search_context):
         r"(البورصة المصرية|البورصة|EGX|EGX30|EGX33|EGX70|EGX100|egyptian exchange|egyptian stock market)",
         query, re.I
     ))
+    egypt_terms = ("egx", "egypt", "egyptian", "مصر", "المصري", "المصرية", "المصريه", "القاهرة", "القاهره", "egyptian exchange")
+    market_terms = ("بورصة", "البورصة", "أسهم", "اسهم", "سهم", "مؤشر", "سوق المال", "stock", "stocks", "shares", "equities", "market index", "exchange")
     output, dated_count = [], 0
     for item in results:
         if egx_intent:
-            subject_text = (item.get("title", "") + " " + item.get("snippet", "") + " " + item.get("source", "")).lower()
-            subject_terms = ("egx", "egypt", "egyptian", "بورصة", "البورصة", "أسهم", "اسهم", "مؤشر", "مصري", "المصرية", "شركات", "سوق المال", "stock market", "shares", "market index")
-            if not any(term in subject_text for term in subject_terms):
+            subject_text = (item.get("title", "") + " " + item.get("snippet", "")).lower()
+            host = urlparse(item.get("url", "")).netloc.lower()
+            if not host.endswith("egx.com.eg") and not (
+                any(term in subject_text for term in egypt_terms)
+                and any(term in subject_text for term in market_terms)
+            ):
                 continue
         raw_date = (item.get("date") or "").strip()
         dt = None
