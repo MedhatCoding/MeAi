@@ -13,31 +13,40 @@ from agent_tools import list_workspace_files, read_workspace_file, write_workspa
 from agent_runtime import execute_agent_actions
 
 def parse_agent_json_response(response):
-    """Parse and normalize a bounded agent plan without executing model output."""
+    """Parse model output defensively; never execute returned text."""
     if not isinstance(response, str) or not response.strip():
         raise ValueError("لم يُرجع النموذج خطة. أعد المحاولة.")
     cleaned = response.strip().lstrip("\ufeff")
-    cleaned = cleaned.replace("“", '"').replace("”", '"')
+    cleaned = cleaned.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
     cleaned = re.sub(r"^\s*```(?:json)?\s*", "", cleaned, flags=re.I)
     cleaned = re.sub(r"\s*```\s*$", "", cleaned)
-    start, end = cleaned.find("{"), cleaned.rfind("}")
-    candidates = [cleaned]
-    if start >= 0 and end > start:
-        candidates.append(cleaned[start:end + 1])
-    for candidate in candidates:
-        candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
-        candidate = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', candidate)
-        try:
-            result = json.loads(candidate)
-        except (json.JSONDecodeError, TypeError):
+    # Try each plausible object span; a decoder failure must not execute or silently accept text.
+    spans = []
+    for start, char in enumerate(cleaned):
+        if char == "{":
+            spans.append(start)
+    last_error = None
+    for start in spans[:20]:
+        candidate = cleaned[start:]
+        # Trim trailing prose after the last closing brace.
+        end = candidate.rfind("}")
+        if end >= 0:
+            candidate = candidate[:end + 1]
+        attempts = [candidate]
+        fixed = re.sub(r",\s*([}\]])", r"\1", candidate)
+        fixed = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', fixed)
+        attempts.append(fixed)
+        for attempt in attempts:
             try:
-                import ast
-                result = ast.literal_eval(candidate)
-            except (ValueError, SyntaxError):
+                result = json.loads(attempt)
+            except (json.JSONDecodeError, TypeError) as exc:
+                last_error = exc
                 continue
-        if isinstance(result, dict):
-            return result
-    raise ValueError("رد النموذج غير مكتمل أو يحتوي على تنسيق غير صالح. أعد المحاولة؛ لم تُنفذ أي إجراءات.")
+            if isinstance(result, dict):
+                return result
+    if isinstance(last_error, json.JSONDecodeError):
+        raise ValueError(f"رد النموذج غير صالح أو غير مكتمل قرب العمود {last_error.colno}. جرت محاولة تصحيح واحدة.") from last_error
+    raise ValueError("تعذر قراءة خطة الوكيل. جرت محاولة تصحيح واحدة؛ لم تُنفذ إجراءات.") from last_error
 
 
 APP_DIR = Path(__file__).parent
@@ -852,7 +861,17 @@ elif page == "الوكيل":
                         {"role":"system","content":tool_policy},
                         {"role":"user","content":"المهمة: "+agent_goal.strip()+"\nوضع التنفيذ: "+agent_mode+"\nأخرج JSON فقط."}
                     ])
-                    payload = parse_agent_json_response(response)
+                    try:
+                        payload = parse_agent_json_response(response)
+                    except ValueError:
+                        # Retry once with a short, schema-constrained repair request.
+                        repaired_response = call_model([
+                            {"role": "system", "content": 'Return one valid JSON object only, with exactly these top-level keys: "summary" (string), "actions" (array), "checks" (array). Convert the supplied text into valid JSON. Do not add actions or invent details. No Markdown fences or prose.'},
+                            {"role": "user", "content": "Normalize this model response into valid JSON, preserving its meaning:\n" + str(response)[:10000]},
+                        ])
+                        payload = parse_agent_json_response(repaired_response)
+                    if not isinstance(payload, dict):
+                        raise ValueError("خطة الوكيل يجب أن تكون كائنًا.")
                     actions = payload.get("actions", [])
                     if not isinstance(actions, list) or len(actions) > 6:
                         raise ValueError("خطة الوكيل غير صالحة: الحد الأقصى ستة إجراءات.")
