@@ -26,7 +26,7 @@ def parse_agent_json_response(response):
             if in_string:
                 if escaped:
                     escaped = False
-                elif char == "\\\\":
+                elif char == "\\":
                     escaped = True
                 elif char == '"':
                     in_string = False
@@ -44,8 +44,8 @@ def parse_agent_json_response(response):
             continue
         candidate = cleaned[start:end]
         attempts = [candidate]
-        fixed = re.sub(r",\\s*([}\\]])", r"\\1", candidate)
-        fixed = re.sub(r'([{,]\\s*)([A-Za-z_][A-Za-z0-9_]*)\\s*:', r'\\1"\\2":', fixed)
+        fixed = re.sub(r",\s*([}\]])", r"\1", candidate)
+        fixed = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', fixed)
         attempts.append(fixed)
         for attempt in attempts:
             try:
