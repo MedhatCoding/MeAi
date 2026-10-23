@@ -30,6 +30,32 @@ class WorkspaceToolTests(unittest.TestCase):
         agent_tools.write_workspace_file("config.json", '{"enabled": true}')
         self.assertTrue(agent_tools.validate_workspace_file("config.json")["ok"])
 
+    def test_rejects_parent_traversal_and_hidden_paths(self):
+        for path in ("../outside.txt", "nested/../../outside.py", ".env", "nested/.hidden.txt"):
+            with self.subTest(path=path):
+                with self.assertRaises(ValueError):
+                    agent_tools.write_workspace_file(path, "not allowed")
+
+    def test_rejects_disallowed_file_extensions(self):
+        with self.assertRaisesRegex(ValueError, "امتداد الملف غير مسموح"):
+            agent_tools.write_workspace_file("payload.exe", "not executable")
+
+    def test_rejects_symlinked_parent_directory(self):
+        outside = Path(self.temp_dir.name).parent / (Path(self.temp_dir.name).name + "_outside")
+        outside.mkdir(exist_ok=True)
+        link = agent_tools.WORKSPACE_ROOT / "linked"
+        try:
+            link.symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "مجلدات رمزية"):
+                agent_tools.write_workspace_file("linked/file.txt", "blocked")
+        finally:
+            if link.is_symlink():
+                link.unlink()
+            try:
+                outside.rmdir()
+            except OSError:
+                pass
+
 
 class AgentRuntimeTests(unittest.TestCase):
     def test_rejects_plans_over_six_actions(self):
