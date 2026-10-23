@@ -2,6 +2,7 @@ import os
 import base64
 import re
 import json
+import html as html_lib
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -584,9 +585,10 @@ page = st.radio(
 configured_providers = _provider_configs()
 provider_status = "متصل" if configured_providers else "يحتاج إعداد"
 provider_icon = "●" if configured_providers else "○"
-provider_mode = secret("AI_PROVIDER", "auto")
+provider_mode = html_lib.escape(str(secret("AI_PROVIDER", "auto")))
+last_provider = html_lib.escape(str(st.session_state.get("last_ai_provider", "لم يُستخدم بعد")))
+provider_status = html_lib.escape(provider_status)
 memory_status = "ذاكرة دائمة" if cloud_memory_enabled() else "ذاكرة مؤقتة"
-last_provider = st.session_state.get("last_ai_provider", "لم يُستخدم بعد")
 st.markdown(f"""
 <div class="status-grid">
   <div class="status-card"><div class="status-label">حالة الذكاء الاصطناعي</div><div class="status-value">{provider_icon} {provider_status}</div><div class="status-detail">الوضع: {provider_mode}</div></div>
