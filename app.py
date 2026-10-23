@@ -873,8 +873,18 @@ elif page == "الوكيل":
                     if not isinstance(payload, dict):
                         raise ValueError("خطة الوكيل يجب أن تكون كائنًا.")
                     actions = payload.get("actions", [])
-                    if not isinstance(actions, list) or len(actions) > 6:
-                        raise ValueError("خطة الوكيل غير صالحة: الحد الأقصى ستة إجراءات.")
+                    if not isinstance(actions, list):
+                        raise ValueError("خطة الوكيل غير صالحة: يجب أن تكون الإجراءات قائمة.")
+                    # Some models ignore the requested limit. Keep the first six ordered
+                    # actions rather than failing the entire agent cycle.
+                    if len(actions) > 6:
+                        actions = actions[:6]
+                        payload["actions"] = actions
+                        note = "تم تقليص الخطة تلقائيًا إلى أول ستة إجراءات مسموحة."
+                        payload["checks"] = payload.get("checks", [])
+                        if not isinstance(payload["checks"], list):
+                            payload["checks"] = []
+                        payload["checks"].append(note)
                     log = []
                     if agent_mode == "خطة فقط":
                         log.append("وضع التخطيط فقط: لم تُنفذ أي أداة أو تُكتب ملفات.")
