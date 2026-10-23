@@ -84,6 +84,50 @@ input,textarea,[role="combobox"]{font-size:16px!important}
 .stButton>button,.stDownloadButton>button{min-height:50px}
 [data-testid="stChatMessage"]{padding:.7rem .8rem;border-radius:17px}
 }
+
+/* Medhat AI complete product-wide visual system */
+:root{--ma-bg:#090d18;--ma-surface:#111827;--ma-surface2:#151f32;--ma-border:rgba(151,170,218,.17);--ma-text:#eef3ff;--ma-muted:#9baac7;--ma-accent:#8b9cff;--ma-cyan:#61e5ed}
+html,body,[data-testid="stAppViewContainer"],[data-testid="stApp"]{background:var(--ma-bg)!important;color:var(--ma-text)!important}
+[data-testid="stHeader"]{background:rgba(9,13,24,.86)!important;backdrop-filter:blur(18px)}
+[data-testid="stMain"]{background:radial-gradient(ellipse at 80% -12%,rgba(82,106,245,.17),transparent 40%),radial-gradient(ellipse at 4% 35%,rgba(42,188,204,.055),transparent 35%),var(--ma-bg)!important}
+.block-container{max-width:1160px!important}
+[data-testid="stVerticalBlockBorderWrapper"]{border-color:var(--ma-border)!important;border-radius:20px!important;background:linear-gradient(145deg,rgba(20,29,47,.82),rgba(13,19,32,.86))!important}
+[data-testid="stTabs"] [role="tablist"]{gap:7px;border-bottom:1px solid var(--ma-border);padding:5px 2px;overflow-x:auto}
+[data-testid="stTabs"] button[role="tab"]{border:1px solid transparent;border-radius:13px;padding:.55rem .9rem;color:var(--ma-muted);font-weight:700;white-space:nowrap}
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"]{background:linear-gradient(135deg,rgba(110,128,255,.2),rgba(66,205,219,.09));border-color:rgba(129,151,255,.3);color:#f4f7ff}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stNumberInput"] input,[data-testid="stDateInput"] input,[data-testid="stTimeInput"] input,[data-testid="stSelectbox"]>div>div,[data-testid="stMultiSelect"]>div>div{border-radius:13px!important;background:#101827!important;border-color:var(--ma-border)!important;color:var(--ma-text)!important}
+[data-testid="stFileUploader"]{border:1px dashed rgba(133,157,230,.4);border-radius:18px;background:rgba(17,26,44,.5);padding:.35rem}
+[data-testid="stFileUploader"] section{border:0!important}
+[data-testid="stDataFrame"],[data-testid="stTable"]{border:1px solid var(--ma-border);border-radius:16px;overflow:hidden}
+[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(23,33,55,.94),rgba(14,21,36,.94))!important;border-color:var(--ma-border)!important;box-shadow:0 8px 24px rgba(0,0,0,.1)}
+[data-testid="stProgress"]>div>div{background:linear-gradient(90deg,#6478ff,#54d8e4)!important;border-radius:999px}
+[data-testid="stAlert"]{border-radius:16px!important;border:1px solid var(--ma-border)!important}
+[data-testid="stExpander"]{background:rgba(16,24,40,.68)!important;border-color:var(--ma-border)!important}
+[data-testid="stCode"],pre,code{border-radius:13px!important}
+hr{border-color:var(--ma-border)!important}
+.stButton>button,.stDownloadButton>button,[data-testid="stFormSubmitButton"]>button{background:linear-gradient(135deg,rgba(105,122,255,.16),rgba(70,203,219,.07));border:1px solid rgba(139,158,255,.27);color:#f2f5ff;box-shadow:0 5px 18px rgba(0,0,0,.08)}
+.stButton>button:hover,.stDownloadButton>button:hover{border-color:rgba(106,222,232,.7);background:linear-gradient(135deg,rgba(105,122,255,.26),rgba(70,203,219,.14));transform:translateY(-1px)}
+[data-testid="stRadio"] label,[data-testid="stCheckbox"] label{color:#dce5fa}
+.brand-header{position:relative}
+.brand-header:after{content:"PERSONAL AI WORKSPACE";position:absolute;left:0;bottom:1.25rem;font-size:.59rem;letter-spacing:.14em;color:#667695;direction:ltr}
+[data-testid="stSidebar"]{background:#0b1120!important;border-left:1px solid var(--ma-border)}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"]{color:#dce5fa}
+[data-testid="stChatInput"]{border-radius:22px!important;border:1px solid rgba(139,158,255,.35)!important;background:linear-gradient(145deg,#141d30,#101725)!important;box-shadow:0 12px 38px rgba(0,0,0,.26)!important}
+[data-testid="stChatInput"] textarea{color:#f4f7ff!important}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p{line-height:1.85!important}
+[data-testid="stStatusWidget"]{border-radius:12px}
+@media(max-width:700px){
+ .block-container{padding:.5rem .72rem 7.5rem!important}
+ .brand-header{gap:.7rem;padding:.55rem 0 .85rem}
+ .brand-header:after{display:none}
+ h1{font-size:1.55rem!important} h2{font-size:1.28rem!important} h3{font-size:1.08rem!important}
+ [data-testid="stTabs"] [role="tablist"]{padding-bottom:.4rem}
+ [data-testid="stTabs"] button[role="tab"]{padding:.55rem .72rem;font-size:.85rem}
+ [data-testid="stVerticalBlockBorderWrapper"]{border-radius:17px!important}
+ [data-testid="stDataFrame"]{max-width:100%;overflow-x:auto}
+ [data-testid="stFileUploader"]{padding:.15rem}
+}
+
 </style>
 """, unsafe_allow_html=True)
 
