@@ -20,6 +20,58 @@ ALLOWED_SUFFIXES = {
 }
 
 
+# Never import secrets, runtime state, dependencies, or generated artifacts.
+SKIP_DIRS = {
+    ".git", ".github", ".streamlit", ".venv", "venv", "__pycache__",
+    "node_modules", "site-packages", "dist", "build", ".pytest_cache",
+}
+SKIP_NAMES = {
+    ".env", ".env.local", ".env.production", "secrets.toml",
+    "assistant_memory.db", "assistant_memory.db-wal", "assistant_memory.db-shm",
+}
+SECRET_NAME_RE = re.compile(r"(secret|credential|token|password|private.?key|api.?key)", re.I)
+
+
+def initialize_workspace(project_root: str | Path) -> dict:
+    """Seed an empty isolated workspace with safe, text-based project files.
+
+    Existing workspace content is never overwritten. Secret-like files and
+    generated/dependency directories are excluded.
+    """
+    source_root = Path(project_root).resolve()
+    WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
+    existing = list_workspace_files()
+    if existing:
+        return {"seeded": 0, "existing": len(existing), "workspace": str(WORKSPACE_ROOT)}
+    seeded = 0
+    skipped = 0
+    for source in sorted(source_root.rglob("*")):
+        try:
+            relative = source.relative_to(source_root)
+            if any(part in SKIP_DIRS or part.startswith(".") for part in relative.parts[:-1]):
+                skipped += 1
+                continue
+            if not source.is_file() or source.is_symlink():
+                continue
+            name = source.name.lower()
+            if name in SKIP_NAMES or name.startswith(".env") or SECRET_NAME_RE.search(name):
+                skipped += 1
+                continue
+            if source.suffix.lower() not in ALLOWED_SUFFIXES:
+                continue
+            if source.stat().st_size > MAX_FILE_BYTES:
+                skipped += 1
+                continue
+            destination = _safe_path(relative.as_posix())
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(source.read_bytes())
+            seeded += 1
+        except (OSError, ValueError):
+            skipped += 1
+            continue
+    return {"seeded": seeded, "existing": 0, "skipped": skipped, "workspace": str(WORKSPACE_ROOT)}
+
+
 def _safe_path(relative_path: str) -> Path:
     raw = (relative_path or "").strip().replace("\\", "/")
     if not raw or raw.startswith("/") or re.match(r"^[A-Za-z]:", raw):
