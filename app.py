@@ -13,41 +13,31 @@ from agent_tools import list_workspace_files, read_workspace_file, write_workspa
 from agent_runtime import execute_agent_actions
 
 def parse_agent_json_response(response):
-    """Parse model output defensively without executing returned text."""
+    """Parse and normalize a bounded agent plan without executing model output."""
     if not isinstance(response, str) or not response.strip():
-        raise ValueError("لم يُرجع النموذج خطة. أعد المحاولة أو غيّر المهمة.")
+        raise ValueError("لم يُرجع النموذج خطة. أعد المحاولة.")
     cleaned = response.strip().lstrip("\ufeff")
+    cleaned = cleaned.replace("“", '"').replace("”", '"')
     cleaned = re.sub(r"^\s*```(?:json)?\s*", "", cleaned, flags=re.I)
     cleaned = re.sub(r"\s*```\s*$", "", cleaned)
     start, end = cleaned.find("{"), cleaned.rfind("}")
     candidates = [cleaned]
     if start >= 0 and end > start:
         candidates.append(cleaned[start:end + 1])
-    last_error = None
     for candidate in candidates:
+        candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+        candidate = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', candidate)
         try:
-            parsed = json.loads(candidate)
-        except (json.JSONDecodeError, TypeError) as exc:
-            last_error = exc
+            result = json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
             try:
                 import ast
-                parsed = ast.literal_eval(candidate)
+                result = ast.literal_eval(candidate)
             except (ValueError, SyntaxError):
-                repaired = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', candidate)
-                repaired = re.sub(r'\bNone\b', 'null', repaired)
-                repaired = re.sub(r'\bTrue\b', 'true', repaired)
-                repaired = re.sub(r'\bFalse\b', 'false', repaired)
-                try:
-                    parsed = json.loads(repaired)
-                except (json.JSONDecodeError, TypeError) as repair_exc:
-                    last_error = repair_exc
-                    continue
-        if isinstance(parsed, dict):
-            return parsed
-        last_error = ValueError("خطة الوكيل يجب أن تكون كائن JSON.")
-    if isinstance(last_error, json.JSONDecodeError):
-        raise ValueError(f"رد النموذج ليس JSON صالحًا (السطر {last_error.lineno}، العمود {last_error.colno}). أعد المحاولة.") from last_error
-    raise ValueError("تعذر قراءة خطة الوكيل. أعد المحاولة أو اجعل المهمة أبسط.") from last_error
+                continue
+        if isinstance(result, dict):
+            return result
+    raise ValueError("رد النموذج غير مكتمل أو يحتوي على تنسيق غير صالح. أعد المحاولة؛ لم تُنفذ أي إجراءات.")
 
 
 APP_DIR = Path(__file__).parent
