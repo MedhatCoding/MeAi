@@ -15,11 +15,11 @@ def execute_agent_actions(actions, *, search_fn, allow_writes=False, max_actions
     """Execute a bounded, ordered tool plan and return auditable results."""
     if not isinstance(actions, list):
         raise ValueError("قائمة إجراءات الوكيل غير صالحة.")
-    # Enforce the safety limit without aborting the whole cycle when a model
-    # returns too many actions. Only the first ordered actions are eligible.
+    # Reject oversized plans explicitly; the caller may normalize model output
+    # before execution, but the runtime remains a strict safety boundary.
     allowed_count = max(0, min(int(max_actions), MAX_ACTIONS))
-    omitted_count = max(0, len(actions) - allowed_count)
-    actions = actions[:allowed_count]
+    if len(actions) > allowed_count:
+        raise ValueError(f"الحد الأقصى {allowed_count} إجراءات؛ اعد تقسيم الخطة.")
     results = []
     for index, action in enumerate(actions, start=1):
         label = f"{index}. {action.get('type', 'unknown')}" if isinstance(action, dict) else f"{index}. invalid"
@@ -56,10 +56,4 @@ def execute_agent_actions(actions, *, search_fn, allow_writes=False, max_actions
             results.append({"action": label, "status": "تم", "message": rendered[:MAX_TOOL_OUTPUT]})
         except Exception as exc:
             results.append({"action": label, "status": "فشل", "message": f"{type(exc).__name__}: {str(exc)[:500]}"})
-    if omitted_count:
-        results.append({
-            "action": "حد الأمان",
-            "status": "تم التجاوز بأمان",
-            "message": f"تم تجاهل {omitted_count} إجراء/إجراءات زائدة؛ الحد الأقصى المسموح {allowed_count}."
-        })
     return results
