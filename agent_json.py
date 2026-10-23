@@ -13,16 +13,39 @@ def parse_agent_json_response(response):
     cleaned = re.sub(r"\s*```\s*$", "", cleaned)
     if len(cleaned) > 100_000:
         raise ValueError("رد النموذج أكبر من الحد المسموح لتحليل الخطة.")
-    spans = [start for start, char in enumerate(cleaned) if char == "{"][:20]
+    # Extract balanced JSON objects while respecting quoted strings and escapes.
+    spans = [index for index, char in enumerate(cleaned) if char == "{"][:20]
     last_error = None
     for start in spans:
-        candidate = cleaned[start:]
-        end = candidate.rfind("}")
-        if end >= 0:
-            candidate = candidate[:end + 1]
+        depth = 0
+        in_string = False
+        escaped = False
+        end = None
+        for index in range(start, len(cleaned)):
+            char = cleaned[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    end = index + 1
+                    break
+        if end is None:
+            continue
+        candidate = cleaned[start:end]
         attempts = [candidate]
-        fixed = re.sub(r",\s*([}\]])", r"\1", candidate)
-        fixed = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', fixed)
+        fixed = re.sub(r",\\s*([}\\]])", r"\\1", candidate)
+        fixed = re.sub(r'([{,]\\s*)([A-Za-z_][A-Za-z0-9_]*)\\s*:', r'\\1"\\2":', fixed)
         attempts.append(fixed)
         for attempt in attempts:
             try:
