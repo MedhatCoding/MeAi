@@ -35,6 +35,16 @@ html,body,[data-testid="stAppViewContainer"]{direction:rtl}
 .brand-title span{background:linear-gradient(105deg,#5ce7ff,#7c83ff 55%,#c69aff);-webkit-background-clip:text;background-clip:text;color:transparent}
 .brand-subtitle{font-size:clamp(.82rem,2.8vw,.96rem);color:#9ba8c4;margin-top:.32rem;line-height:1.55}
 .hero{display:block;width:100%;min-width:0;box-sizing:border-box;padding:clamp(1.15rem,4vw,1.85rem);border:1px solid rgba(123,154,232,.18);border-radius:26px;margin-bottom:1.1rem;background:linear-gradient(130deg,rgba(32,48,85,.78),rgba(19,24,42,.82));box-shadow:0 18px 60px rgba(0,0,0,.12)}
+.status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;margin:.2rem 0 1rem}
+.status-card{min-width:0;padding:.85rem 1rem;border:1px solid rgba(126,153,220,.2);border-radius:17px;background:linear-gradient(145deg,rgba(25,33,55,.86),rgba(15,20,34,.9));box-shadow:0 8px 26px rgba(0,0,0,.08)}
+.status-label{font-size:.78rem;color:#a9b6d2;margin-bottom:.35rem}
+.status-value{font-size:1.02rem;font-weight:800;overflow-wrap:anywhere}
+.status-detail{font-size:.76rem;color:#8998b8;margin-top:.25rem;overflow-wrap:anywhere}
+.feature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;margin:.8rem 0 1.1rem}
+.feature-card{padding:1rem;border:1px solid rgba(126,153,220,.18);border-radius:18px;background:rgba(20,27,45,.68);min-width:0}
+.feature-card strong{display:block;font-size:1rem;margin-bottom:.25rem}
+.feature-card span{display:block;font-size:.84rem;color:#9ba8c4;line-height:1.6}
+
 .hero h1{font-size:clamp(1.45rem,5vw,2.25rem)!important;margin-bottom:.4rem}
 h1,h2,h3{letter-spacing:-.025em;line-height:1.35!important}
 p,li,label,.stCaption{line-height:1.7!important}
@@ -571,20 +581,23 @@ page = st.radio(
     horizontal=True,
     label_visibility="collapsed",
 )
-st.caption("نسخة أولية قابلة للتطوير")
 configured_providers = _provider_configs()
-st.caption("حالة مزوّد الذكاء الاصطناعي: " + ("مُعدّ ✅" if configured_providers else "غير مُعدّ ⚠️"))
-st.caption("وضع الاختيار: " + secret("AI_PROVIDER", "auto") + " — ترتيب التلقائي يبدأ بـ Cloudflare ثم المزوّدين البدلاء المُعدّين.")
-if st.session_state.get("last_ai_provider"):
-    st.caption("آخر مزوّد نجح في الرد: " + st.session_state["last_ai_provider"])
-if cloud_memory_enabled():
-    st.caption("الذاكرة: قاعدة بيانات دائمة متصلة ✅")
-else:
-    st.caption("الذاكرة: تخزين مؤقت على الاستضافة ⚠️ — اربط Supabase للاحتفاظ بها بعد إعادة التشغيل.")
+provider_status = "متصل" if configured_providers else "يحتاج إعداد"
+provider_icon = "●" if configured_providers else "○"
+provider_mode = secret("AI_PROVIDER", "auto")
+memory_status = "ذاكرة دائمة" if cloud_memory_enabled() else "ذاكرة مؤقتة"
+last_provider = st.session_state.get("last_ai_provider", "لم يُستخدم بعد")
+st.markdown(f"""
+<div class="status-grid">
+  <div class="status-card"><div class="status-label">حالة الذكاء الاصطناعي</div><div class="status-value">{provider_icon} {provider_status}</div><div class="status-detail">الوضع: {provider_mode}</div></div>
+  <div class="status-card"><div class="status-label">الذاكرة</div><div class="status-value">{memory_status}</div><div class="status-detail">{"متصلة بقاعدة بيانات دائمة" if cloud_memory_enabled() else "قد تُمسح عند إعادة تشغيل الاستضافة"}</div></div>
+  <div class="status-card"><div class="status-label">آخر مزوّد ناجح</div><div class="status-value">{last_provider}</div><div class="status-detail">اختيار تلقائي للمزوّدين المُعدّين</div></div>
+</div>
+""", unsafe_allow_html=True)
 st.divider()
 
 if page == "المحادثة":
-    st.markdown('<div class="hero"><h1>أهلاً بيك 👋</h1><p>اسأل بالعربي، ارفع ملفًا، واطلب شرحًا خطوة بخطوة.</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero"><h1>أهلاً بيك في Medhat AI</h1><p>مساحة واحدة للمحادثة الذكية، البرمجة، إنجاز المهام، والعمل على ملفاتك — بتصميم واضح على الموبايل.</p><div class="feature-grid"><div class="feature-card"><strong>✦ محادثة ذكية</strong><span>إجابات بالعربي، بحث عند الحاجة، وتحليل الملفات المرفوعة.</span></div><div class="feature-card"><strong>⌘ وكيل تنفيذي</strong><span>خطوات واضحة داخل مساحة عمل محدودة وآمنة.</span></div><div class="feature-card"><strong>▧ مساحة العمل</strong><span>إنشاء الملفات ومراجعتها وفحصها دون تشغيل كود عشوائي.</span></div><div class="feature-card"><strong>✧ توليد إبداعي</strong><span>أدوات الصور والفيديو بحسب المزوّدات والمفاتيح المتاحة.</span></div></div></div>', unsafe_allow_html=True)
     upload = st.file_uploader("ارفع ملفًا للتحليل", type=["txt","md","py","json","csv","yaml","yml","toml","html","xml","pdf","docx","xlsx","xls"])
     file_context = f"محتوى الملف {upload.name}:\n{extract_file(upload)}" if upload else ""
     if "chat" not in st.session_state:
