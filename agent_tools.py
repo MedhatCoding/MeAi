@@ -33,17 +33,16 @@ SECRET_NAME_RE = re.compile(r"(secret|credential|token|password|private.?key|api
 
 
 def initialize_workspace(project_root: str | Path) -> dict:
-    """Seed an empty isolated workspace with safe, text-based project files.
+    """Seed missing safe project files without overwriting workspace edits.
 
-    Existing workspace content is never overwritten. Secret-like files and
-    generated/dependency directories are excluded.
+    This runs on each agent-page visit so a partially populated or stale
+    workspace is repaired automatically. Secret-like files and generated
+    dependency directories are excluded.
     """
     source_root = Path(project_root).resolve()
     WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
-    existing = list_workspace_files()
-    if existing:
-        return {"seeded": 0, "existing": len(existing), "workspace": str(WORKSPACE_ROOT)}
     seeded = 0
+    existing = 0
     skipped = 0
     for source in sorted(source_root.rglob("*")):
         try:
@@ -63,13 +62,21 @@ def initialize_workspace(project_root: str | Path) -> dict:
                 skipped += 1
                 continue
             destination = _safe_path(relative.as_posix())
+            if destination.exists():
+                existing += 1
+                continue
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(source.read_bytes())
             seeded += 1
         except (OSError, ValueError):
             skipped += 1
             continue
-    return {"seeded": seeded, "existing": 0, "skipped": skipped, "workspace": str(WORKSPACE_ROOT)}
+    return {
+        "seeded": seeded,
+        "existing": existing,
+        "skipped": skipped,
+        "workspace": str(WORKSPACE_ROOT),
+    }
 
 
 def _safe_path(relative_path: str) -> Path:
