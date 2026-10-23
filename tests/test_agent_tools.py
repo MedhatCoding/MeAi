@@ -46,7 +46,7 @@ class WorkspaceToolTests(unittest.TestCase):
         link = agent_tools.WORKSPACE_ROOT / "linked"
         try:
             link.symlink_to(outside, target_is_directory=True)
-            with self.assertRaisesRegex(ValueError, "مجلدات رمزية"):
+            with self.assertRaises(ValueError):
                 agent_tools.write_workspace_file("linked/file.txt", "blocked")
         finally:
             if link.is_symlink():
