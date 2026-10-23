@@ -26,6 +26,19 @@ class AgentJsonParserTests(unittest.TestCase):
             {"actions": []},
         )
 
+    def test_ignores_braces_in_json_strings_and_trailing_prose(self):
+        raw = 'Plan: {"actions": [], "note": "brace } and { inside string"} trailing {not json}'
+        self.assertEqual(
+            parse_agent_json_response(raw),
+            {"actions": [], "note": "brace } and { inside string"},
+        )
+
+    def test_chooses_first_complete_object_not_last_brace(self):
+        self.assertEqual(
+            parse_agent_json_response('{"actions": []} extra text {"other": true}'),
+            {"actions": []},
+        )
+
     def test_rejects_empty_and_non_string_responses(self):
         for value in ("", "   ", None, 123):
             with self.subTest(value=value):
