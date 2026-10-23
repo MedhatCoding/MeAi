@@ -47,6 +47,16 @@ html,body,[data-testid="stAppViewContainer"]{direction:rtl}
 .feature-card span{display:block;font-size:.84rem;color:#9ba8c4;line-height:1.6}
 
 .hero h1{font-size:clamp(1.45rem,5vw,2.25rem)!important;margin-bottom:.4rem}
+.welcome-panel{text-align:center;padding:clamp(1.3rem,5vw,2.6rem) .8rem 1.2rem}
+.welcome-orb{display:flex;align-items:center;justify-content:center;width:58px;height:58px;margin:0 auto 1rem;border-radius:21px;font-size:1.8rem;color:#d6f8ff;background:linear-gradient(145deg,rgba(65,207,239,.2),rgba(116,104,255,.2));border:1px solid rgba(107,205,255,.35);box-shadow:0 0 45px rgba(69,132,255,.14)}
+.welcome-panel h1{font-size:clamp(1.55rem,5vw,2.25rem)!important;margin-bottom:.5rem}
+.welcome-panel p{max-width:560px;margin:0 auto;color:#a6b2cc;font-size:.98rem}
+.prompt-hint{color:#8291b2;font-size:.82rem;margin:.8rem 0 .45rem}
+[data-testid="stChatMessage"]{border:0!important;border-radius:8px!important;padding:.8rem .15rem!important;background:transparent!important;margin:.45rem 0!important}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]){background:rgba(41,51,77,.42)!important;border:1px solid rgba(137,155,205,.1)!important;border-radius:18px!important;padding:.85rem 1rem!important}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"]{line-height:1.8}
+[data-testid="stChatInput"]{position:sticky;bottom:.4rem;box-shadow:0 10px 40px rgba(0,0,0,.22)}
+
 h1,h2,h3{letter-spacing:-.025em;line-height:1.35!important}
 p,li,label,.stCaption{line-height:1.7!important}
 [data-testid="stChatMessage"]{width:100%;min-width:0;border:1px solid rgba(137,155,205,.12);border-radius:20px;padding:.85rem 1rem;background:rgba(21,27,44,.66);margin:.65rem 0}
@@ -589,17 +599,33 @@ provider_mode = html_lib.escape(str(secret("AI_PROVIDER", "auto")))
 last_provider = html_lib.escape(str(st.session_state.get("last_ai_provider", "لم يُستخدم بعد")))
 provider_status = html_lib.escape(provider_status)
 memory_status = "ذاكرة دائمة" if cloud_memory_enabled() else "ذاكرة مؤقتة"
-st.markdown(f"""
-<div class="status-grid">
-  <div class="status-card"><div class="status-label">حالة الذكاء الاصطناعي</div><div class="status-value">{provider_icon} {provider_status}</div><div class="status-detail">الوضع: {provider_mode}</div></div>
-  <div class="status-card"><div class="status-label">الذاكرة</div><div class="status-value">{memory_status}</div><div class="status-detail">{"متصلة بقاعدة بيانات دائمة" if cloud_memory_enabled() else "قد تُمسح عند إعادة تشغيل الاستضافة"}</div></div>
-  <div class="status-card"><div class="status-label">آخر مزوّد ناجح</div><div class="status-value">{last_provider}</div><div class="status-detail">اختيار تلقائي للمزوّدين المُعدّين</div></div>
-</div>
-""", unsafe_allow_html=True)
-st.divider()
+if page != "المحادثة":
+    st.markdown(f"""
+    <div class="status-grid">
+      <div class="status-card"><div class="status-label">حالة الذكاء الاصطناعي</div><div class="status-value">{provider_icon} {provider_status}</div><div class="status-detail">الوضع: {provider_mode}</div></div>
+      <div class="status-card"><div class="status-label">الذاكرة</div><div class="status-value">{memory_status}</div><div class="status-detail">{"متصلة بقاعدة بيانات دائمة" if cloud_memory_enabled() else "قد تُمسح عند إعادة تشغيل الاستضافة"}</div></div>
+      <div class="status-card"><div class="status-label">آخر مزوّد ناجح</div><div class="status-value">{last_provider}</div><div class="status-detail">اختيار تلقائي للمزوّدين المُعدّين</div></div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.divider()
 
 if page == "المحادثة":
-    st.markdown('<div class="hero"><h1>أهلاً بيك في Medhat AI</h1><p>مساحة واحدة للمحادثة الذكية، البرمجة، إنجاز المهام، والعمل على ملفاتك — بتصميم واضح على الموبايل.</p><div class="feature-grid"><div class="feature-card"><strong>✦ محادثة ذكية</strong><span>إجابات بالعربي، بحث عند الحاجة، وتحليل الملفات المرفوعة.</span></div><div class="feature-card"><strong>⌘ وكيل تنفيذي</strong><span>خطوات واضحة داخل مساحة عمل محدودة وآمنة.</span></div><div class="feature-card"><strong>▧ مساحة العمل</strong><span>إنشاء الملفات ومراجعتها وفحصها دون تشغيل كود عشوائي.</span></div><div class="feature-card"><strong>✧ توليد إبداعي</strong><span>أدوات الصور والفيديو بحسب المزوّدات والمفاتيح المتاحة.</span></div></div></div>', unsafe_allow_html=True)
+    if not st.session_state.get("chat"):
+        st.markdown('<section class="welcome-panel"><div class="welcome-orb">✦</div><h1>إزيك! أقدر أساعدك في إيه؟</h1><p>اسأل، حلّل ملف، اكتب كود، أو ابدأ مهمة. هساعدك خطوة بخطوة وبوضوح.</p></section>', unsafe_allow_html=True)
+        st.markdown('<div class="prompt-hint">جرّب تبدأ بواحد من دول</div>', unsafe_allow_html=True)
+        suggestions = [
+            ("⌘", "اكتب كود أو أصلح خطأ", "راجع الكود التالي وحدد الأخطاء وأصلحها مع اختبارات."),
+            ("⌕", "ابحث بمصادر موثوقة", "ابحث عن أحدث تطورات الذكاء الاصطناعي خلال آخر 7 أيام مع روابط وتواريخ."),
+            ("▧", "حلّل ملف", "سأرفع ملفًا؛ لخّص محتواه واستخرج أهم النتائج."),
+            ("✦", "خطّط لمشروع", "أنشئ خطة تنفيذ عملية لمشروعي مع خطوات واختبارات واضحة."),
+        ]
+        for row in (suggestions[:2], suggestions[2:]):
+            cols = st.columns(2)
+            for col, item in zip(cols, row):
+                with col:
+                    if st.button(f"{item[0]}  {item[1]}", key="suggest_"+item[1], use_container_width=True):
+                        st.session_state["suggested_prompt"] = item[2]
+                        st.rerun()
     upload = st.file_uploader("ارفع ملفًا للتحليل", type=["txt","md","py","json","csv","yaml","yml","toml","html","xml","pdf","docx","xlsx","xls"])
     file_context = f"محتوى الملف {upload.name}:\n{extract_file(upload)}" if upload else ""
     if "chat" not in st.session_state:
@@ -620,7 +646,7 @@ if page == "المحادثة":
     for msg in st.session_state.chat:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-    prompt = st.chat_input("اكتب سؤالك هنا...")
+    suggested_prompt = st.session_state.pop("suggested_prompt", "")\n    prompt = st.chat_input("اسأل Medhat AI أي حاجة...", key="main_chat_input")\n    if suggested_prompt and not prompt:\n        prompt = suggested_prompt
     if prompt:
         st.session_state.chat.append({"role":"user","content":prompt})
         with st.chat_message("user"):
