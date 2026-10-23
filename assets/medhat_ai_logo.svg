@@ -1,7 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<title>Medhat AI</title>
-<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#101827"/><stop offset="1" stop-color="#211849"/></linearGradient><linearGradient id="neon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#25D9F2"/><stop offset=".52" stop-color="#3988FF"/><stop offset="1" stop-color="#A16BFF"/></linearGradient></defs>
-<rect width="512" height="512" rx="112" fill="url(#bg)"/><circle cx="256" cy="230" r="142" fill="none" stroke="#34496D" stroke-width="8"/>
-<path d="M143 337V193c0-24 29-35 45-17l68 75 68-75c16-18 45-7 45 17v144" fill="none" stroke="url(#neon)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M205 150c0-28 23-51 51-51s51 23 51 51v29h-102z" fill="#101827" stroke="#27D7F2" stroke-width="12"/><circle cx="234" cy="145" r="8" fill="#27D7F2"/><circle cx="278" cy="145" r="8" fill="#27D7F2"/><path d="M256 77v20" stroke="#27D7F2" stroke-width="12" stroke-linecap="round"/><circle cx="256" cy="67" r="13" fill="#27D7F2"/>
-<text x="256" y="421" font-family="Arial,sans-serif" font-size="54" font-weight="800" text-anchor="middle" fill="#F5F7FF">MEDHAT AI</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Abstract AI emblem">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07142f"/><stop offset="1" stop-color="#100b36"/></linearGradient>
+ <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#22e4f6"/><stop offset=".42" stop-color="#2768ff"/><stop offset=".76" stop-color="#8d35ff"/><stop offset="1" stop-color="#ef72ff"/></linearGradient>
+ <radialGradient id="glow"><stop stop-color="#75ffff" stop-opacity=".95"/><stop offset="1" stop-color="#20d8ff" stop-opacity="0"/></radialGradient>
+ <filter id="soft"><feGaussianBlur stdDeviation="12"/></filter>
+</defs>
+<rect width="512" height="512" rx="112" fill="url(#bg)"/>
+<circle cx="256" cy="256" r="158" fill="none" stroke="#2465d9" stroke-opacity=".55" stroke-width="7"/>
+<circle cx="256" cy="256" r="150" fill="url(#glow)" opacity=".28" filter="url(#soft)"/>
+<path d="M256 92 C320 92 351 161 329 207 C312 243 276 252 256 256 C236 260 200 269 183 305 C161 351 192 420 256 420 C320 420 351 351 329 305 C312 269 276 260 256 256 C236 252 200 243 183 207 C161 161 192 92 256 92Z" fill="url(#ribbon)" opacity=".97"/>
+<path d="M110 256 C110 194 179 163 221 193 C247 212 251 239 256 256 C261 273 265 300 291 319 C333 349 402 318 402 256 C402 194 333 163 291 193 C265 212 261 239 256 256 C251 273 247 300 221 319 C179 349 110 318 110 256Z" fill="url(#ribbon)" opacity=".88"/>
+<circle cx="256" cy="256" r="42" fill="url(#glow)"/>
+<path d="M256 222 L267 245 L290 256 L267 267 L256 290 L245 267 L222 256 L245 245Z" fill="#e9ffff"/>
+<circle cx="143" cy="163" r="15" fill="#42e9ff"/><circle cx="369" cy="163" r="15" fill="#a56cff"/>
+<circle cx="143" cy="349" r="15" fill="#42bfff"/><circle cx="369" cy="349" r="15" fill="#e17cff"/>
+</svg>
