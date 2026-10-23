@@ -16,7 +16,7 @@ def parse_agent_json_response(response):
     """Parse an LLM agent plan even when it wraps JSON in fences or emits a Python-style dict."""
     if not isinstance(response, str) or not response.strip():
         raise ValueError("لم يُرجع النموذج خطة. أعد المحاولة أو غيّر المهمة.")
-    cleaned = response.strip().lstrip("\\ufeff")
+    cleaned = response.strip().lstrip("\ufeff")
     # Correctly remove Markdown fences (the old pattern escaped the backslashes twice).
     cleaned = re.sub(r"^\s*```(?:json)?\s*", "", cleaned, flags=re.I)
     cleaned = re.sub(r"\s*```\s*$", "", cleaned)
