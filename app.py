@@ -646,7 +646,10 @@ if page == "المحادثة":
     for msg in st.session_state.chat:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-    suggested_prompt = st.session_state.pop("suggested_prompt", "")\n    prompt = st.chat_input("اسأل Medhat AI أي حاجة...", key="main_chat_input")\n    if suggested_prompt and not prompt:\n        prompt = suggested_prompt
+    suggested_prompt = st.session_state.pop("suggested_prompt", "")
+    prompt = st.chat_input("اسأل Medhat AI أي حاجة...", key="main_chat_input")
+    if suggested_prompt and not prompt:
+        prompt = suggested_prompt
     if prompt:
         st.session_state.chat.append({"role":"user","content":prompt})
         with st.chat_message("user"):
