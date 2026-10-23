@@ -31,5 +31,35 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertTrue(agent_tools.validate_workspace_file("config.json")["ok"])
 
 
+class AgentRuntimeTests(unittest.TestCase):
+    def test_rejects_plans_over_six_actions(self):
+        from agent_runtime import execute_agent_actions
+
+        actions = [{"type": "list_files"}] * 7
+        with self.assertRaisesRegex(ValueError, "الحد الأقصى"):
+            execute_agent_actions(actions, search_fn=lambda query: "unused")
+
+    def test_write_requires_explicit_permission(self):
+        from agent_runtime import execute_agent_actions
+
+        results = execute_agent_actions(
+            [{"type": "write_file", "path": "blocked.txt", "content": "no"}],
+            search_fn=lambda query: "unused",
+            allow_writes=False,
+        )
+        self.assertEqual(results[0]["status"], "فشل")
+        self.assertIn("الكتابة غير مفعّلة", results[0]["message"])
+
+    def test_unknown_tools_are_rejected(self):
+        from agent_runtime import execute_agent_actions
+
+        results = execute_agent_actions(
+            [{"type": "run_shell", "command": "echo unsafe"}],
+            search_fn=lambda query: "unused",
+        )
+        self.assertEqual(results[0]["status"], "فشل")
+        self.assertIn("غير مسموح", results[0]["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
