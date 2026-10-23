@@ -11,42 +11,8 @@ import streamlit as st
 
 from agent_tools import initialize_workspace, list_workspace_files, read_workspace_file, write_workspace_file, validate_workspace_file
 from agent_runtime import execute_agent_actions
+from agent_json import parse_agent_json_response
 
-def parse_agent_json_response(response):
-    """Parse model output defensively; never execute returned text."""
-    if not isinstance(response, str) or not response.strip():
-        raise ValueError("لم يُرجع النموذج خطة. أعد المحاولة.")
-    cleaned = response.strip().lstrip("\ufeff")
-    cleaned = cleaned.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
-    cleaned = re.sub(r"^\s*```(?:json)?\s*", "", cleaned, flags=re.I)
-    cleaned = re.sub(r"\s*```\s*$", "", cleaned)
-    # Try each plausible object span; a decoder failure must not execute or silently accept text.
-    spans = []
-    for start, char in enumerate(cleaned):
-        if char == "{":
-            spans.append(start)
-    last_error = None
-    for start in spans[:20]:
-        candidate = cleaned[start:]
-        # Trim trailing prose after the last closing brace.
-        end = candidate.rfind("}")
-        if end >= 0:
-            candidate = candidate[:end + 1]
-        attempts = [candidate]
-        fixed = re.sub(r",\s*([}\]])", r"\1", candidate)
-        fixed = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', fixed)
-        attempts.append(fixed)
-        for attempt in attempts:
-            try:
-                result = json.loads(attempt)
-            except (json.JSONDecodeError, TypeError) as exc:
-                last_error = exc
-                continue
-            if isinstance(result, dict):
-                return result
-    if isinstance(last_error, json.JSONDecodeError):
-        raise ValueError(f"رد النموذج غير صالح أو غير مكتمل قرب العمود {last_error.colno}. جرت محاولة تصحيح واحدة.") from last_error
-    raise ValueError("تعذر قراءة خطة الوكيل. جرت محاولة تصحيح واحدة؛ لم تُنفذ إجراءات.") from last_error
 
 
 APP_DIR = Path(__file__).parent
