@@ -53,69 +53,49 @@ APP_DIR = Path(__file__).parent
 # Streamlit Cloud may mount the repository as read-only; keep the temporary SQLite DB writable.
 DB = Path(os.getenv("MEDHAT_AI_DB_PATH", "/tmp/assistant_memory.db"))
 
-st.set_page_config(page_title="Medhat AI", page_icon=str(APP_DIR / "assets" / "medhat_ai_logo.svg"), layout="wide")
+st.set_page_config(page_title="Medhat AI | المساعد الشخصي", page_icon=str(APP_DIR / "assets" / "medhat_ai_logo.svg"), layout="wide", initial_sidebar_state="collapsed", menu_items={"About": "Medhat AI — مساعدك الذكي الشخصي"})
 
 st.markdown("""
 <style>
-:root { color-scheme: dark; }
-html, body, [data-testid="stAppViewContainer"] { direction: rtl; }
-[data-testid="stMain"] *, [data-testid="stSidebar"] * {
-  writing-mode: horizontal-tb !important; word-break: normal !important;
-}
-[data-testid="stMarkdownContainer"] {
-  direction: rtl !important; text-align: right !important; width: 100%;
-  min-width: 0; white-space: normal !important; overflow-wrap: anywhere !important;
-}
-[data-testid="stChatMessage"] { width: 100%; min-width: 0; border-radius: 18px; }
-.block-container {
-  width: 100%; max-width: 920px; min-width: 0;
-  padding: 1rem max(1rem, env(safe-area-inset-left)) 7rem max(1rem, env(safe-area-inset-right));
-}
-.brand-header {
-  display:flex; align-items:center; gap:.85rem; width:100%; box-sizing:border-box;
-  padding:.55rem 0 1rem; border-bottom:1px solid rgba(100,140,255,.20); margin-bottom:.75rem;
-}
-.brand-header img { width:58px; height:58px; object-fit:contain; flex:0 0 58px; border-radius:17px; }
-.brand-title { font-size:clamp(1.35rem,4.5vw,1.9rem); font-weight:800; letter-spacing:-.03em; line-height:1.2; }
-.brand-title span { background:linear-gradient(100deg,#27d4f5,#8b6cff); -webkit-background-clip:text; background-clip:text; color:transparent; }
-.brand-subtitle { font-size:clamp(.82rem,2.8vw,.95rem); opacity:.78; margin-top:.28rem; line-height:1.5; }
-.hero { display:block; width:100%; min-width:0; box-sizing:border-box; padding:clamp(1rem,4vw,1.5rem);
-  border:1px solid rgba(128,150,190,.24); border-radius:22px; margin-bottom:1rem;
-  background:linear-gradient(145deg,rgba(34,47,76,.48),rgba(18,24,42,.32)); }
-h1, h2, h3 { letter-spacing:-.025em; line-height:1.3 !important; }
-p, li, label, .stCaption { line-height:1.65 !important; }
-.stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] > button {
-  min-height:48px; border-radius:14px; font-size:1rem; font-weight:650;
-  padding:.65rem 1rem; width:100%; transition:transform .12s ease, border-color .12s ease;
-}
-.stButton > button:active { transform:scale(.985); }
-[data-testid="stChatInput"] { border-radius:22px !important; }
-[data-testid="stChatInput"] textarea { font-size:16px !important; line-height:1.5 !important; }
-input, textarea, [role="combobox"] { font-size:16px !important; }
-[data-testid="stRadio"] label { cursor:pointer; }
-[data-testid="stMetric"] { border:1px solid rgba(128,150,190,.18); border-radius:16px; padding:.8rem; }
-[data-testid="stAlert"] { border-radius:15px; }
-@media (max-width:700px) {
-  .block-container { padding:.65rem .8rem 6.8rem !important; }
-  .brand-header img { width:48px; height:48px; flex-basis:48px; }
-  [data-testid="stHorizontalBlock"] { flex-wrap:wrap !important; gap:.55rem !important; }
-  [data-testid="column"] { min-width:100% !important; width:100% !important; flex:1 1 100% !important; }
-  [data-testid="stRadio"] > div[role="radiogroup"] {
-    position:fixed; z-index:999; bottom:0; left:0; right:0;
-    box-sizing:border-box; padding:.45rem .35rem max(.5rem, env(safe-area-inset-bottom));
-    background:rgba(10,15,28,.97); border-top:1px solid rgba(120,150,220,.28);
-    backdrop-filter:blur(18px); display:flex !important; flex-direction:row !important;
-    flex-wrap:nowrap !important; justify-content:space-around; gap:.18rem;
-    width:100%; overflow-x:auto;
-  }
-  [data-testid="stRadio"] > div[role="radiogroup"] label {
-    flex:1 0 auto; min-width:0; justify-content:center; border-radius:12px;
-    padding:.48rem .48rem; font-size:.78rem; white-space:nowrap;
-  }
-  [data-testid="stRadio"] > div[role="radiogroup"] label p { font-size:.78rem !important; }
-  [data-testid="stRadio"] > label { display:none; }
-  [data-testid="stMetric"] { padding:.65rem; }
-  .stButton > button, .stDownloadButton > button { min-height:50px; }
+:root{color-scheme:dark}
+html,body,[data-testid="stAppViewContainer"]{direction:rtl}
+[data-testid="stMain"]{background:radial-gradient(ellipse at 78% -10%,rgba(61,105,230,.16),transparent 45%),#0a0d16}
+[data-testid="stMain"] *,[data-testid="stSidebar"] *{writing-mode:horizontal-tb!important;word-break:normal!important}
+[data-testid="stMarkdownContainer"]{direction:rtl!important;text-align:right!important;width:100%;min-width:0;white-space:normal!important;overflow-wrap:anywhere!important}
+.block-container{width:100%;max-width:1080px;min-width:0;padding:1.15rem max(1rem,env(safe-area-inset-left)) 7rem max(1rem,env(safe-area-inset-right))}
+.brand-header{display:flex;align-items:center;gap:.9rem;width:100%;box-sizing:border-box;padding:.65rem 0 1.05rem;border-bottom:1px solid rgba(126,157,237,.17);margin-bottom:1.1rem}
+.brand-header img{width:54px;height:54px;object-fit:contain;flex:0 0 54px;border-radius:18px;filter:drop-shadow(0 8px 22px rgba(66,119,255,.22))}
+.brand-title{font-size:clamp(1.45rem,4.8vw,2rem);font-weight:850;letter-spacing:-.04em;line-height:1.2}
+.brand-title span{background:linear-gradient(105deg,#5ce7ff,#7c83ff 55%,#c69aff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand-subtitle{font-size:clamp(.82rem,2.8vw,.96rem);color:#9ba8c4;margin-top:.32rem;line-height:1.55}
+.hero{display:block;width:100%;min-width:0;box-sizing:border-box;padding:clamp(1.15rem,4vw,1.85rem);border:1px solid rgba(123,154,232,.18);border-radius:26px;margin-bottom:1.1rem;background:linear-gradient(130deg,rgba(32,48,85,.78),rgba(19,24,42,.82));box-shadow:0 18px 60px rgba(0,0,0,.12)}
+.hero h1{font-size:clamp(1.45rem,5vw,2.25rem)!important;margin-bottom:.4rem}
+h1,h2,h3{letter-spacing:-.025em;line-height:1.35!important}
+p,li,label,.stCaption{line-height:1.7!important}
+[data-testid="stChatMessage"]{width:100%;min-width:0;border:1px solid rgba(137,155,205,.12);border-radius:20px;padding:.85rem 1rem;background:rgba(21,27,44,.66);margin:.65rem 0}
+[data-testid="stChatInput"]{border-radius:24px!important;border:1px solid rgba(120,149,225,.3)!important;background:#151a29!important}
+[data-testid="stChatInput"] textarea{font-size:16px!important;line-height:1.6!important}
+input,textarea,[role="combobox"]{font-size:16px!important}
+.stButton>button,.stDownloadButton>button,[data-testid="stFormSubmitButton"]>button{min-height:48px;border-radius:15px;font-size:1rem;font-weight:700;padding:.65rem 1rem;width:100%;border:1px solid rgba(125,153,225,.24);transition:transform .12s ease,border-color .12s ease}
+.stButton>button:active{transform:scale(.985)}
+[data-testid="stMetric"]{border:1px solid rgba(128,150,190,.18);border-radius:18px;padding:.85rem;background:rgba(21,27,44,.52)}
+[data-testid="stAlert"]{border-radius:16px}
+[data-testid="stExpander"]{border:1px solid rgba(125,153,225,.17);border-radius:15px;overflow:hidden}
+[data-testid="stRadio"] label{cursor:pointer}
+@media(min-width:701px){[data-testid="stRadio"]>div[role="radiogroup"]{display:flex;gap:.35rem;padding:.35rem;border:1px solid rgba(126,153,220,.18);border-radius:18px;background:rgba(19,24,40,.88);width:100%;overflow-x:auto}[data-testid="stRadio"]>div[role="radiogroup"] label{border-radius:12px;padding:.5rem .7rem;white-space:nowrap}[data-testid="stRadio"]>div[role="radiogroup"] label:has(input:checked){background:rgba(95,113,222,.23)}}
+@media(max-width:700px){
+.block-container{padding:.55rem .8rem 6.7rem!important}
+.brand-header img{width:48px;height:48px;flex-basis:48px}
+[data-testid="stHorizontalBlock"]{flex-wrap:wrap!important;gap:.55rem!important}
+[data-testid="column"]{min-width:100%!important;width:100%!important;flex:1 1 100%!important}
+[data-testid="stRadio"]>div[role="radiogroup"]{position:fixed;z-index:999;bottom:0;left:0;right:0;box-sizing:border-box;padding:.42rem .35rem max(.55rem,env(safe-area-inset-bottom));background:rgba(10,14,25,.97);border-top:1px solid rgba(120,150,220,.25);backdrop-filter:blur(20px);display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;justify-content:flex-start;gap:.25rem;width:100%;overflow-x:auto;scrollbar-width:none}
+[data-testid="stRadio"]>div[role="radiogroup"]::-webkit-scrollbar{display:none}
+[data-testid="stRadio"]>div[role="radiogroup"] label{flex:0 0 auto;min-width:68px;justify-content:center;border-radius:12px;padding:.5rem .6rem;font-size:.77rem;white-space:nowrap;background:rgba(35,42,64,.48)}
+[data-testid="stRadio"]>div[role="radiogroup"] label p{font-size:.77rem!important}
+[data-testid="stRadio"]>label{display:none}
+[data-testid="stMetric"]{padding:.65rem}
+.stButton>button,.stDownloadButton>button{min-height:50px}
+[data-testid="stChatMessage"]{padding:.7rem .8rem;border-radius:17px}
 }
 </style>
 """, unsafe_allow_html=True)
