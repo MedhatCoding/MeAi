@@ -1020,7 +1020,32 @@ elif page == "توليد الفيديو":
             try:
                 from video_tools import generate_video as make_video
                 with st.spinner("جاري إرسال الطلب إلى مزوّد الفيديو؛ قد يستغرق عدة دقائق..."):
-                    video_bytes, provider_label = make_video(video_prompt.strip(), model=video_model.strip(), negative_prompt=video_negative.strip(), api_key=video_token_input.strip() or None)
+                    import inspect
+                    supplied_token = video_token_input.strip()
+                    if "api_key" in inspect.signature(make_video).parameters:
+                        video_bytes, provider_label = make_video(
+                            video_prompt.strip(), model=video_model.strip(),
+                            negative_prompt=video_negative.strip(), api_key=supplied_token or None
+                        )
+                    elif supplied_token:
+                        # Compatibility with an older deployed video_tools.py while Streamlit finishes syncing files.
+                        old_token = os.environ.get("HF_TOKEN")
+                        os.environ["HF_TOKEN"] = supplied_token
+                        try:
+                            video_bytes, provider_label = make_video(
+                                video_prompt.strip(), model=video_model.strip(),
+                                negative_prompt=video_negative.strip()
+                            )
+                        finally:
+                            if old_token is None:
+                                os.environ.pop("HF_TOKEN", None)
+                            else:
+                                os.environ["HF_TOKEN"] = old_token
+                    else:
+                        video_bytes, provider_label = make_video(
+                            video_prompt.strip(), model=video_model.strip(),
+                            negative_prompt=video_negative.strip()
+                        )
                 st.session_state["last_generated_video"] = video_bytes
                 st.session_state["last_generated_video_model"] = provider_label
                 st.success("تم إنشاء الفيديو بنجاح عبر "+provider_label)
