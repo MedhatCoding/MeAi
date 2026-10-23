@@ -9,7 +9,7 @@ from pathlib import Path
 import requests
 import streamlit as st
 
-from agent_tools import list_workspace_files, read_workspace_file, write_workspace_file, validate_workspace_file
+from agent_tools import initialize_workspace, list_workspace_files, read_workspace_file, write_workspace_file, validate_workspace_file
 from agent_runtime import execute_agent_actions
 
 def parse_agent_json_response(response):
@@ -836,6 +836,16 @@ elif page == "مساحة العمل":
 
 elif page == "الوكيل":
     st.title("🤖 الوكيل التنفيذي")
+    try:
+        workspace_status = initialize_workspace(APP_DIR)
+        if workspace_status.get("seeded", 0):
+            st.info(f"تم تجهيز مساحة العمل تلقائيًا بـ {workspace_status['seeded']} ملفًا آمنًا من المشروع لفحصها.")
+        elif workspace_status.get("existing", 0):
+            st.caption(f"مساحة العمل تحتوي على {workspace_status['existing']} ملفًا.")
+        else:
+            st.warning("لم يتم العثور على ملفات نصية مسموحة لتهيئة مساحة العمل.")
+    except Exception as workspace_exc:
+        st.warning(f"تعذر تهيئة ملفات المشروع: {type(workspace_exc).__name__}: {workspace_exc}")
     st.write("نفّذ مهام محددة داخل مساحة العمل باستخدام أدوات محدودة، مع سجل واضح لما حدث.")
     st.warning("الوكيل لا يشغّل أوامر النظام ولا ينشر أو يرسل أو يشتري شيئًا. كتابة الملفات محصورة داخل مساحة العمل المؤقتة، والتحقق ثابت دون تشغيل الكود.")
     if "agent_runs" not in st.session_state:
