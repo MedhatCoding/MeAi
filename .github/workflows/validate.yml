@@ -18,6 +18,6 @@ jobs:
         with:
           python-version: "3.11"
       - name: Compile Python files
-        run: python -m compileall -q app.py agent_tools.py tests
+        run: python -m compileall -q app.py agent_tools.py agent_runtime.py agent_json.py tests
       - name: Run workspace tests
         run: python -m unittest discover -s tests -v
