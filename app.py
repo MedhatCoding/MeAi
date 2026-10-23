@@ -12,6 +12,38 @@ import streamlit as st
 from agent_tools import list_workspace_files, read_workspace_file, write_workspace_file, validate_workspace_file
 from agent_runtime import execute_agent_actions
 
+def parse_agent_json_response(response):
+    """Parse an LLM agent plan even when it wraps JSON in fences or emits a Python-style dict."""
+    if not isinstance(response, str) or not response.strip():
+        raise ValueError("لم يُرجع النموذج خطة. أعد المحاولة أو غيّر المهمة.")
+    cleaned = response.strip().lstrip("\\ufeff")
+    # Correctly remove Markdown fences (the old pattern escaped the backslashes twice).
+    cleaned = re.sub(r"^\s*```(?:json)?\s*", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"\s*```\s*$", "", cleaned)
+    candidates = [cleaned]
+    # Models sometimes add explanatory text around the object.
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    if start >= 0 and end > start:
+        candidates.append(cleaned[start:end + 1])
+    last_error = None
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            try:
+                # Safe literal parser: accepts single-quoted Python dicts, but never evaluates code.
+                import ast
+                parsed = ast.literal_eval(candidate)
+            except (ValueError, SyntaxError):
+                continue
+        if isinstance(parsed, dict):
+            return parsed
+        last_error = ValueError("خطة الوكيل يجب أن تكون كائنًا يحتوي على summary وactions.")
+    detail = f" ({last_error.msg})" if isinstance(last_error, json.JSONDecodeError) else ""
+    raise ValueError("تعذر قراءة خطة الوكيل بصيغة JSON. حاول مرة أخرى." + detail)
+
+
 APP_DIR = Path(__file__).parent
 # Streamlit Cloud may mount the repository as read-only; keep the temporary SQLite DB writable.
 DB = Path(os.getenv("MEDHAT_AI_DB_PATH", "/tmp/assistant_memory.db"))
@@ -824,9 +856,7 @@ elif page == "الوكيل":
                         {"role":"system","content":tool_policy},
                         {"role":"user","content":"المهمة: "+agent_goal.strip()+"\nوضع التنفيذ: "+agent_mode+"\nأخرج JSON فقط."}
                     ])
-                    cleaned = re.sub(r"^\\s*```(?:json)?\\s*\\n?", "", response.strip(), flags=re.I)
-                    cleaned = re.sub(r"\\n?```\\s*$", "", cleaned)
-                    payload = json.loads(cleaned)
+                    payload = parse_agent_json_response(response)
                     actions = payload.get("actions", [])
                     if not isinstance(actions, list) or len(actions) > 6:
                         raise ValueError("خطة الوكيل غير صالحة: الحد الأقصى ستة إجراءات.")
