@@ -57,54 +57,65 @@ st.set_page_config(page_title="Medhat AI", page_icon=str(APP_DIR / "assets" / "m
 
 st.markdown("""
 <style>
-/* Keep Streamlit's responsive layout intact; apply RTL only to text. */
-html, body { direction: rtl; }
-[data-testid="stAppViewContainer"] { direction: rtl; }
-[data-testid="stMain"] *,
-[data-testid="stSidebar"] * {
-    writing-mode: horizontal-tb !important;
-    word-break: normal !important;
+:root { color-scheme: dark; }
+html, body, [data-testid="stAppViewContainer"] { direction: rtl; }
+[data-testid="stMain"] *, [data-testid="stSidebar"] * {
+  writing-mode: horizontal-tb !important; word-break: normal !important;
 }
 [data-testid="stMarkdownContainer"] {
-    direction: rtl !important;
-    text-align: right !important;
-    width: 100%;
-    min-width: 0;
-    white-space: normal !important;
-    overflow-wrap: break-word !important;
+  direction: rtl !important; text-align: right !important; width: 100%;
+  min-width: 0; white-space: normal !important; overflow-wrap: anywhere !important;
 }
-[data-testid="stChatMessage"] {
-    width: 100%;
-    min-width: 0;
-}
+[data-testid="stChatMessage"] { width: 100%; min-width: 0; border-radius: 18px; }
 .block-container {
-    width: 100%;
-    max-width: 1000px;
-    min-width: 0;
-    padding: 1rem max(1rem, env(safe-area-inset-left)) 5rem max(1rem, env(safe-area-inset-right));
+  width: 100%; max-width: 920px; min-width: 0;
+  padding: 1rem max(1rem, env(safe-area-inset-left)) 7rem max(1rem, env(safe-area-inset-right));
 }
 .brand-header {
-    display: flex; align-items: center; gap: .8rem;
-    width: 100%; box-sizing: border-box; padding: .75rem 0 1rem;
-    border-bottom: 1px solid rgba(80,150,255,.2); margin-bottom: .75rem;
+  display:flex; align-items:center; gap:.85rem; width:100%; box-sizing:border-box;
+  padding:.55rem 0 1rem; border-bottom:1px solid rgba(100,140,255,.20); margin-bottom:.75rem;
 }
-.brand-header img { width: 54px; height: 54px; object-fit: contain; flex: 0 0 54px; }
-.brand-title { font-size: clamp(1.35rem, 4vw, 1.9rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.2; }
-.brand-title span { background: linear-gradient(100deg,#27d4f5,#7c5cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.brand-subtitle { font-size: .88rem; opacity: .75; margin-top: .25rem; }
-.hero {
-    display: block;
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    padding: 1.2rem;
-    border: 1px solid rgba(128,128,128,.25);
-    border-radius: 18px;
-    margin-bottom: 1rem;
+.brand-header img { width:58px; height:58px; object-fit:contain; flex:0 0 58px; border-radius:17px; }
+.brand-title { font-size:clamp(1.35rem,4.5vw,1.9rem); font-weight:800; letter-spacing:-.03em; line-height:1.2; }
+.brand-title span { background:linear-gradient(100deg,#27d4f5,#8b6cff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.brand-subtitle { font-size:clamp(.82rem,2.8vw,.95rem); opacity:.78; margin-top:.28rem; line-height:1.5; }
+.hero { display:block; width:100%; min-width:0; box-sizing:border-box; padding:clamp(1rem,4vw,1.5rem);
+  border:1px solid rgba(128,150,190,.24); border-radius:22px; margin-bottom:1rem;
+  background:linear-gradient(145deg,rgba(34,47,76,.48),rgba(18,24,42,.32)); }
+h1, h2, h3 { letter-spacing:-.025em; line-height:1.3 !important; }
+p, li, label, .stCaption { line-height:1.65 !important; }
+.stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] > button {
+  min-height:48px; border-radius:14px; font-size:1rem; font-weight:650;
+  padding:.65rem 1rem; width:100%; transition:transform .12s ease, border-color .12s ease;
 }
-@media (max-width: 700px) {
-    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: .6rem !important; }
-    [data-testid="column"] { min-width: 100% !important; width: 100% !important; flex: 1 1 100% !important; }
+.stButton > button:active { transform:scale(.985); }
+[data-testid="stChatInput"] { border-radius:22px !important; }
+[data-testid="stChatInput"] textarea { font-size:16px !important; line-height:1.5 !important; }
+input, textarea, [role="combobox"] { font-size:16px !important; }
+[data-testid="stRadio"] label { cursor:pointer; }
+[data-testid="stMetric"] { border:1px solid rgba(128,150,190,.18); border-radius:16px; padding:.8rem; }
+[data-testid="stAlert"] { border-radius:15px; }
+@media (max-width:700px) {
+  .block-container { padding:.65rem .8rem 6.8rem !important; }
+  .brand-header img { width:48px; height:48px; flex-basis:48px; }
+  [data-testid="stHorizontalBlock"] { flex-wrap:wrap !important; gap:.55rem !important; }
+  [data-testid="column"] { min-width:100% !important; width:100% !important; flex:1 1 100% !important; }
+  [data-testid="stRadio"] > div[role="radiogroup"] {
+    position:fixed; z-index:999; bottom:0; left:0; right:0;
+    box-sizing:border-box; padding:.45rem .35rem max(.5rem, env(safe-area-inset-bottom));
+    background:rgba(10,15,28,.97); border-top:1px solid rgba(120,150,220,.28);
+    backdrop-filter:blur(18px); display:flex !important; flex-direction:row !important;
+    flex-wrap:nowrap !important; justify-content:space-around; gap:.18rem;
+    width:100%; overflow-x:auto;
+  }
+  [data-testid="stRadio"] > div[role="radiogroup"] label {
+    flex:1 0 auto; min-width:0; justify-content:center; border-radius:12px;
+    padding:.48rem .48rem; font-size:.78rem; white-space:nowrap;
+  }
+  [data-testid="stRadio"] > div[role="radiogroup"] label p { font-size:.78rem !important; }
+  [data-testid="stRadio"] > label { display:none; }
+  [data-testid="stMetric"] { padding:.65rem; }
+  .stButton > button, .stDownloadButton > button { min-height:50px; }
 }
 </style>
 """, unsafe_allow_html=True)
