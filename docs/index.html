@@ -2,52 +2,91 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#101114"><meta name="description" content="Medhat AI — مساعدك الذكي الشخصي">
+<meta name="theme-color" content="#0b0d12"><meta name="description" content="Medhat AI — مساحة عملك الذكية للمحادثة والبرمجة والمهام والوسائط">
 <link rel="manifest" href="./manifest.json"><link rel="icon" href="./icons/medhat-ai.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="./icons/medhat-ai.svg">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Medhat AI"><meta name="mobile-web-app-capable" content="yes">
-<title>Medhat AI</title>
+<title>Medhat AI — مساحة عمل ذكية</title>
 <style>
-:root{color-scheme:dark;--bg:#101114;--panel:#191a1f;--line:#2c2d33;--muted:#a3a4ad;--text:#f5f5f7;--accent:#b6f09c}
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}body{display:flex;flex-direction:column;overflow:hidden}
-header{height:60px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 15px;border-bottom:1px solid var(--line);background:#141519}
-.brand{display:flex;align-items:center;gap:10px}.brand img{width:37px;height:37px}.brand b{font-size:17px;letter-spacing:.1px}.brand small{display:block;font-size:10px;color:var(--muted);margin-top:1px}
-.actions{display:flex;gap:8px}.btn{border:1px solid #393a42;border-radius:22px;background:#202127;color:#eee;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer}
-main{flex:1;min-height:0;display:flex;flex-direction:column}.welcome{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;padding:22px 18px 28px}
-.intro{width:min(100%,560px);text-align:center}.spark{width:58px;height:58px;border:1px solid #42444c;border-radius:22px;display:grid;place-items:center;margin:0 auto 18px;background:linear-gradient(145deg,#272a30,#17181d);font-size:27px;color:var(--accent)}
-h1{font-size:clamp(24px,6vw,34px);font-weight:650;line-height:1.25;margin:0 0 10px;letter-spacing:-.7px}h1 span{color:#b7f09c}.sub{font-size:14px;line-height:1.8;color:#b2b3bc;margin:0 auto 25px;max-width:390px}
-.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;text-align:right}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 13px;min-height:90px;color:var(--text);text-align:right;font:inherit;cursor:pointer;transition:border-color .15s}.card:active{border-color:#9cc58b}.card .ico{font-size:19px;display:block;margin-bottom:8px}.card b{font-size:13px;font-weight:600;display:block}.card small{font-size:11px;color:var(--muted);display:block;margin-top:4px;line-height:1.5}
-.start{margin-top:18px;width:100%;border:0;border-radius:15px;background:var(--accent);color:#152014;font:inherit;font-weight:750;padding:15px;cursor:pointer;font-size:14px}.foot{font-size:10px;color:#81828a;margin-top:13px}
-.chatview{display:none;flex:1;min-height:0;position:relative}.chatview iframe{width:100%;height:100%;border:0;background:#fff}.chatbar{padding:8px 14px;background:#15161a;border-top:1px solid var(--line);font-size:11px;color:var(--muted);text-align:center}
-body.inchat .welcome{display:none}body.inchat .chatview{display:flex}
-@media(min-width:760px){.welcome{padding:32px}.intro{max-width:680px}.cards{grid-template-columns:repeat(4,minmax(0,1fr))}.card{min-height:118px;padding:17px}header{padding:0 26px}}
-@media(max-height:650px){.welcome{padding-top:12px;padding-bottom:12px}.spark{width:44px;height:44px;margin-bottom:10px}.sub{margin-bottom:14px}.card{min-height:70px;padding:10px}.start{margin-top:12px;padding:12px}}
+:root{color-scheme:dark;--bg:#0b0d12;--panel:#12151d;--panel2:#171b25;--line:#282d39;--muted:#9ba4b7;--text:#f5f7fb;--accent:#c6f6a5;--violet:#9b9cff;--cyan:#8be6ed}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}body{display:flex;overflow:hidden}
+button{font:inherit;cursor:pointer}button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.sidebar{width:252px;flex:0 0 252px;background:#0e1016;border-left:1px solid var(--line);padding:19px 13px;display:flex;flex-direction:column;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;padding:0 7px}.brand img{width:40px;height:40px}.brand b{display:block;font-size:16px;letter-spacing:.1px}.brand small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.newchat{border:1px solid #363b49;background:linear-gradient(135deg,#202532,#171b24);color:#fff;border-radius:14px;padding:12px;text-align:right;display:flex;gap:10px;align-items:center}.plus{font-size:21px;color:var(--accent)}
+.nav-label{font-size:10px;letter-spacing:.13em;color:#6f788c;padding:0 11px;margin-bottom:5px}.nav{display:grid;gap:4px}.nav button{display:flex;align-items:center;gap:11px;text-align:right;border:1px solid transparent;background:transparent;color:#b8c0d0;border-radius:12px;padding:11px 12px;font-size:13px}.nav button .icon{width:21px;text-align:center;font-size:17px;color:#aeb8d2}.nav button:hover,.nav button.active{background:#1b202b;border-color:#2c3342;color:#fff}.nav button.active .icon{color:var(--accent)}
+.sidebar-bottom{margin-top:auto;border-top:1px solid var(--line);padding-top:14px}.profile{display:flex;align-items:center;gap:10px;padding:9px}.avatar{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,#8b9cff,#b6f09c);color:#10131b;font-weight:900}.profile b{font-size:12px;display:block}.profile small{color:var(--muted);font-size:10px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;background:radial-gradient(ellipse at 55% -20%,rgba(110,120,255,.12),transparent 48%),var(--bg)}
+.topbar{height:62px;flex-shrink:0;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 25px;background:rgba(12,14,20,.72)}.page-title{font-size:14px;font-weight:700}.page-sub{font-size:10px;color:var(--muted);margin-top:3px}.top-actions{display:flex;gap:8px}.pill{border:1px solid #343947;background:#171a23;color:#dbe1ed;border-radius:22px;padding:8px 12px;font-size:11px}.pill.primary{background:var(--accent);color:#172013;border-color:transparent;font-weight:800}
+.stage{flex:1;min-height:0;overflow:auto}.welcome{max-width:880px;margin:auto;padding:clamp(30px,7vh,74px) 26px 35px}.eyebrow{display:inline-flex;gap:8px;align-items:center;border:1px solid #303747;border-radius:30px;padding:7px 12px;color:#c5cce0;font-size:11px;background:#131720}.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 14px #b6f09c}
+h1{font-size:clamp(30px,4.5vw,49px);letter-spacing:-1.5px;line-height:1.18;margin:23px 0 13px;font-weight:750}h1 span{background:linear-gradient(100deg,#c6f6a5,#9b9cff 65%,#8be6ed);-webkit-background-clip:text;background-clip:text;color:transparent}.lead{font-size:14px;color:#a9b2c4;line-height:1.9;max-width:540px;margin:0}
+.composer{margin:29px 0 24px;padding:13px;border:1px solid #3a4050;border-radius:22px;background:linear-gradient(145deg,#191d27,#12151c);box-shadow:0 18px 55px #0005}.composer textarea{display:block;width:100%;resize:vertical;min-height:70px;max-height:180px;background:transparent;border:0;outline:0;color:var(--text);font:inherit;font-size:14px;line-height:1.7;padding:7px}.composer textarea::placeholder{color:#858fa3}.compose-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:8px}.compose-hint{font-size:10px;color:#818b9f}.compose-actions{display:flex;gap:8px;align-items:center}.tool{border:1px solid #343a49;border-radius:11px;padding:8px 10px;background:#202430;color:#dce3f0;font-size:11px}.send{border:0;border-radius:12px;background:var(--accent);color:#172013;font-weight:850;padding:10px 15px;font-size:12px}
+.section-head{display:flex;justify-content:space-between;align-items:center;margin:27px 0 12px}.section-head b{font-size:13px}.section-head small{color:var(--muted);font-size:10px}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}.card{border:1px solid var(--line);border-radius:17px;background:linear-gradient(145deg,#171b24,#11141b);padding:17px 15px;min-height:133px;text-align:right;color:var(--text);transition:transform .15s,border-color .15s}.card:hover{transform:translateY(-2px);border-color:#59627b}.card .ico{width:35px;height:35px;display:grid;place-items:center;border-radius:12px;background:#252a37;color:var(--accent);font-size:18px;margin-bottom:17px}.card b{display:block;font-size:12px}.card small{display:block;font-size:10px;line-height:1.65;color:var(--muted);margin-top:6px}
+.footer-note{color:#70798b;font-size:10px;line-height:1.7;margin-top:23px}
+.workspace{display:none;height:100%;min-height:0;flex-direction:column}.workspace iframe{flex:1;width:100%;height:100%;border:0;background:#0b0d12}.frame-note{padding:9px 14px;border-bottom:1px solid var(--line);font-size:10px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}.frame-note a{color:var(--accent);text-decoration:none}
+body.open-app .welcome{display:none}body.open-app .workspace{display:flex}
+.mobilebar{display:none}
+@media(max-width:850px){.sidebar{width:215px;flex-basis:215px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.welcome{padding-top:35px}}
+@media(max-width:620px){body{display:block}.sidebar{display:none}.main{height:100dvh}.topbar{height:57px;padding:0 14px}.top-actions .install-label{display:none}.welcome{padding:28px 17px calc(92px + env(safe-area-inset-bottom))}h1{font-size:34px;letter-spacing:-1px}.lead{font-size:13px}.composer{margin:24px 0 19px;border-radius:19px}.composer textarea{min-height:62px}.cards{gap:9px}.card{padding:13px;min-height:119px}.card .ico{margin-bottom:13px}.mobilebar{position:fixed;z-index:10;bottom:0;right:0;left:0;display:flex;justify-content:space-around;gap:2px;padding:8px 5px max(9px,env(safe-area-inset-bottom));background:rgba(13,15,21,.94);backdrop-filter:blur(22px);border-top:1px solid #292e3a}.mobilebar button{flex:1;min-width:0;border:0;background:transparent;color:#8e98ac;border-radius:11px;padding:6px 2px;font-size:9px}.mobilebar button span{display:block;font-size:18px;margin-bottom:3px}.mobilebar button.active{background:#202631;color:var(--accent)}body.open-app .mobilebar{display:none}.frame-note{padding:8px 10px}.frame-note span{max-width:72%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style></head>
 <body>
-<header><div class="brand"><img src="./icons/medhat-ai.svg" alt=""><div><b>Medhat AI</b><small>مساعدك الشخصي الذكي</small></div></div><div class="actions"><button class="btn" id="homeBtn" hidden>الرئيسية</button><button class="btn" id="installBtn" hidden>تثبيت التطبيق</button></div></header>
-<main>
-<section class="welcome" aria-label="بداية المحادثة"><div class="intro">
-<div class="spark">✳</div><h1>أهلاً بيك، <span>نعمل إيه النهارده؟</span></h1>
-<p class="sub">اسأل، حلّل، اكتب كود، أو خطط لمهمة. ابدأ من هنا، والمساعد الحالي هيفتح لك.</p>
-<div class="cards">
-<button class="card" data-prompt="ساعدني في البحث على الويب عن"><span class="ico">⌕</span><b>بحث واستكشاف</b><small>اجمع المعلومات وافهم المصادر</small></button>
-<button class="card" data-prompt="ساعدني في كتابة أو تصحيح الكود التالي:"><span class="ico">⌘</span><b>برمجة وتطوير</b><small>كتابة الكود وفهم الأخطاء</small></button>
-<button class="card" data-prompt="ساعدني في التخطيط لتنفيذ المهمة دي خطوة بخطوة:"><span class="ico">↗</span><b>تنفيذ المهام</b><small>خطط ونظم خطوات الشغل</small></button>
-<button class="card" data-prompt="ساعدني في ابتكار وصف تفصيلي لصورة أريد إنشاءها:"><span class="ico">▧</span><b>أفكار الصور</b><small>جهز وصفًا دقيقًا للصورة</small></button>
+<aside class="sidebar">
+ <div class="brand"><img src="./icons/medhat-ai.svg" alt=""><div><b>Medhat AI</b><small>مساحة عملك الذكية</small></div></div>
+ <button class="newchat" id="newChat"><span class="plus">＋</span><span>محادثة جديدة</span></button>
+ <div><div class="nav-label">مساحة العمل</div><nav class="nav" id="sideNav">
+  <button class="active" data-page="chat"><span class="icon">✳</span>المحادثة</button>
+  <button data-page="agent"><span class="icon">⌘</span>الوكيل الذكي</button>
+  <button data-page="tasks"><span class="icon">◷</span>المهام</button>
+  <button data-page="workspace"><span class="icon">▤</span>الملفات ومساحة العمل</button>
+ </nav></div>
+ <div><div class="nav-label">إنشاء وإدارة</div><nav class="nav">
+  <button data-page="images"><span class="icon">▧</span>توليد الصور</button>
+  <button data-page="video"><span class="icon">▷</span>توليد الفيديو</button>
+  <button data-page="memory"><span class="icon">◉</span>الذاكرة</button>
+  <button data-page="settings"><span class="icon">⚙</span>الإعدادات</button>
+ </nav></div>
+ <div class="sidebar-bottom"><div class="profile"><div class="avatar">M</div><div><b>Medhat AI</b><small>مساعد شخصي • نسخة قابلة للتطوير</small></div></div></div>
+</aside>
+<div class="main">
+ <header class="topbar"><div><div class="page-title" id="pageTitle">المحادثة</div><div class="page-sub">مساعدك الذكي • برمجة وتكاملات وإنجاز مهام</div></div><div class="top-actions"><button class="pill" id="homeBtn" hidden>الرئيسية</button><button class="pill" id="installBtn" hidden>تثبيت التطبيق</button><button class="pill primary" id="openBtn">فتح المساعد ←</button></div></header>
+ <main class="stage">
+  <section class="welcome" aria-label="مساحة البداية">
+   <div class="eyebrow"><span class="dot"></span> مساحة شخصية مدعومة بالذكاء الاصطناعي</div>
+   <h1>أفكارك تبدأ هنا.<br><span>والتنفيذ خطوة بخطوة.</span></h1>
+   <p class="lead">اكتب سؤالك، حلّل ملفًا، طوّر مشروعًا، أو شغّل وكيلك الذكي. كل أدواتك في مساحة واحدة مصممة لتعمل براحة على الهاتف والكمبيوتر.</p>
+   <div class="composer"><textarea id="quickPrompt" rows="2" placeholder="اسأل Medhat AI أي حاجة..."></textarea><div class="compose-row"><span class="compose-hint">عربي وإنجليزي • أسئلة، كود، ملفات ومهام</span><div class="compose-actions"><button class="tool" id="attachBtn" title="فتح مساحة العمل">＋ ملف</button><button class="send" id="sendBtn">ابدأ ←</button></div></div></div>
+   <div class="section-head"><b>ابدأ بمهمة</b><small>اختر مساحة العمل المناسبة</small></div>
+   <div class="cards">
+    <button class="card" data-page="chat"><span class="ico">✳</span><b>محادثة ذكية</b><small>اسأل، اكتب، حلّل، وتابع السياق.</small></button>
+    <button class="card" data-page="agent"><span class="ico">⌘</span><b>الوكيل التنفيذي</b><small>خطط المهام ونفّذ خطوات داخل مساحة العمل.</small></button>
+    <button class="card" data-page="workspace"><span class="ico">▤</span><b>الملفات والمشروعات</b><small>افتح مساحة العمل وراجع ملفاتك.</small></button>
+    <button class="card" data-page="images"><span class="ico">▧</span><b>إنشاء الصور</b><small>جهّز وصفًا إبداعيًا وابدأ التوليد.</small></button>
+   </div>
+   <div class="footer-note">قدرات الأدوات والتوليد تعتمد على مزوّدات الخدمة وإعداداتها. لن تعرض هذه الواجهة نتائج تجريبية على أنها نتائج حقيقية.</div>
+  </section>
+  <section class="workspace" aria-label="تطبيق Medhat AI"><div class="frame-note"><span id="frameTitle">المساعد الكامل — جميع الوظائف الحالية</span><a href="https://medhat-ai-personal.streamlit.app/" target="_blank" rel="noreferrer">فتح في نافذة مستقلة ↗</a></div><iframe id="assistantFrame" title="Medhat AI — التطبيق الكامل" src="about:blank" allow="clipboard-read; clipboard-write"></iframe></section>
+ </main>
 </div>
-<button class="start" id="startBtn">ابدأ محادثة جديدة ←</button>
-<div class="foot">قدرات البحث والتنفيذ وتوليد الوسائط تعتمد على الأدوات ومفاتيح الخدمات المتاحة.</div>
-</div></section>
-<section class="chatview" aria-label="المحادثة"><iframe id="assistantFrame" title="Medhat AI" src="https://medhat-ai-personal.streamlit.app/?embed=true" allow="clipboard-read; clipboard-write"></iframe></section>
-</main>
+<nav class="mobilebar" id="mobileNav" aria-label="التنقل الرئيسي">
+ <button class="active" data-page="chat"><span>✳</span>المحادثة</button><button data-page="agent"><span>⌘</span>الوكيل</button><button data-page="tasks"><span>◷</span>المهام</button><button data-page="workspace"><span>▤</span>مساحة العمل</button><button data-page="settings"><span>⚙</span>الإعدادات</button>
+</nav>
 <script>
-const body=document.body, frame=document.getElementById('assistantFrame'), home=document.getElementById('homeBtn');
-function openChat(prompt){body.classList.add('inchat');home.hidden=false;try{sessionStorage.setItem('medhat_open_chat','1');if(prompt)sessionStorage.setItem('medhat_suggested_prompt',prompt)}catch(e){}}
-document.getElementById('startBtn').addEventListener('click',()=>openChat());
-document.querySelectorAll('[data-prompt]').forEach(el=>el.addEventListener('click',()=>openChat(el.dataset.prompt)));
-home.addEventListener('click',()=>{body.classList.remove('inchat');home.hidden=true});
-try{if(sessionStorage.getItem('medhat_open_chat')==='1')openChat()}catch(e){}
+const body=document.body, frame=document.getElementById('assistantFrame'), home=document.getElementById('homeBtn'), openBtn=document.getElementById('openBtn'), pageTitle=document.getElementById('pageTitle');
+const titles={chat:'المحادثة',agent:'الوكيل الذكي',tasks:'المهام',workspace:'مساحة العمل',images:'توليد الصور',video:'توليد الفيديو',memory:'الذاكرة',settings:'الإعدادات'};
+let activePage='chat', loaded=false;
+function openApp(page='chat',prompt=''){activePage=page;body.classList.add('open-app');home.hidden=false;openBtn.hidden=true;pageTitle.textContent=titles[page]||'Medhat AI';document.getElementById('frameTitle').textContent=(titles[page]||'Medhat AI')+' — التطبيق الكامل';document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));try{sessionStorage.setItem('medhat_open_chat','1');if(prompt)sessionStorage.setItem('medhat_suggested_prompt',prompt)}catch(e){}if(!loaded){frame.src='https://medhat-ai-personal.streamlit.app/?embed=true';loaded=true}}
+function goHome(){body.classList.remove('open-app');home.hidden=true;openBtn.hidden=false;pageTitle.textContent='المحادثة';document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='chat'))}
+document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>openApp(b.dataset.page)));
+document.getElementById('newChat').addEventListener('click',()=>{try{sessionStorage.removeItem('medhat_open_chat');sessionStorage.removeItem('medhat_suggested_prompt')}catch(e){}loaded=false;frame.src='about:blank';openApp('chat')});
+document.getElementById('openBtn').addEventListener('click',()=>openApp('chat'));
+home.addEventListener('click',goHome);
+document.getElementById('sendBtn').addEventListener('click',()=>{const p=document.getElementById('quickPrompt').value.trim();openApp('chat',p)});
+document.getElementById('quickPrompt').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')document.getElementById('sendBtn').click()});
+document.getElementById('attachBtn').addEventListener('click',()=>openApp('workspace'));
 let deferred;const install=document.getElementById('installBtn');
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;install.hidden=false});
 install.addEventListener('click',async()=>{if(!deferred)return;deferred.prompt();await deferred.userChoice;deferred=null;install.hidden=true});
-if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+try{if(sessionStorage.getItem('medhat_open_chat')==='1')openApp('chat')}catch(e){}
 </script></body></html>
