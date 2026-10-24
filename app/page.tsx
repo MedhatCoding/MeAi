@@ -51,7 +51,8 @@ export default function Home() {
   const fileRef = useRef<HTMLInputElement>(null);
   const active = useMemo(() => nav.find(n => n.id === section)!, [section]);
 
-  useEffect(() => { setMessages(readMessages()); try { setDark(localStorage.getItem("medhat-theme") !== "light"); setFiles(JSON.parse(localStorage.getItem("medhat-files-v1") || "[]") as string[]); setMemories(JSON.parse(localStorage.getItem("medhat-memory-v1") || "[]") as string[]); } catch {} }, []);
+  useEffect(() => { setMessages(readMessages()); try { setDark(localStorage.getItem("medhat-theme") !== "light"); setFiles(JSON.parse(localStorage.getItem("medhat-files-v1") || "[]") as string[]); setMemories(JSON.parse(localStorage.getItem("medhat-memory-v1") || "[]") as string[]); setTasks(JSON.parse(localStorage.getItem("medhat-tasks-v1") || JSON.stringify([{title:"مراجعة المشروع واكتشاف الأخطاء",done:false},{title:"تحسين واجهة Medhat AI",done:true}])) as {title:string;done:boolean}[]); } catch {} }, []);
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-tasks-v1", JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-chat-v1", JSON.stringify(messages)); endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages]);
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; if (typeof window !== "undefined") localStorage.setItem("medhat-theme", dark ? "dark" : "light"); }, [dark]);
 
