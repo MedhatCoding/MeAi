@@ -57,16 +57,57 @@ export default function Home() {
 
   async function sendMessage(value = input) {
     const text = value.trim(); if (!text || busy) return;
-    const next: Message[] = [...messages, { role: "user", content: text, time: new Date().toLocaleTimeString("ar-EG", {hour:"2-digit",minute:"2-digit"}) }];
+    const now = () => new Date().toLocaleTimeString("ar-EG", {hour:"2-digit",minute:"2-digit"});
+    const next: Message[] = [...messages, { role: "user", content: text, time: now() }, { role: "assistant", content: "", time: now() }];
     setMessages(next); setInput(""); setBusy(true); setNotice("");
     try {
-      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: next.map(m => ({role:m.role, content:m.content})) }) });
-      if (!res.ok) throw new Error("لم يتم ربط واجهة الويب بخدمة الذكاء الاصطناعي بعد.");
-      const data = await res.json() as { reply?: string };
-      setMessages(old => [...old, { role:"assistant", content:data.reply || "لم يصل رد من المزوّد.", time:new Date().toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"}) }]);
+      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: next.slice(0,-1).map(m => ({role:m.role, content:m.content})) }) });
+      if (!res.ok) {
+        let detail = "فشل الاتصال بخدمة الذكاء الاصطناعي.";
+        try { const data = await res.json() as {error?:string}; if (data.error) detail = data.error; } catch {}
+        throw new Error(detail);
+      }
+      if (!res.body) throw new Error("المزوّد لم يفتح تدفق الإجابة.");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let answer = "";
+      let finished = false;
+      while (!finished) {
+        const { value: chunk, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(chunk, {stream:true});
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+        for (const event of events) {
+          for (const line of event.split("\n")) {
+            if (!line.startsWith("data:")) continue;
+            const data = line.slice(5).trim();
+            if (!data || data === "[DONE]") { if (data === "[DONE]") finished = true; continue; }
+            try {
+              const parsed = JSON.parse(data) as {choices?:{delta?:{content?:string};finish_reason?:string}[];error?:{message?:string}};
+              if (parsed.error?.message) throw new Error(parsed.error.message);
+              const piece = parsed.choices?.[0]?.delta?.content;
+              if (piece) {
+                answer += piece;
+                setMessages(old => old.map((m,i) => i === old.length-1 ? {...m, content:answer} : m));
+              }
+              if (parsed.choices?.[0]?.finish_reason) finished = true;
+            } catch (err) {
+              if (err instanceof Error && err.message !== "Unexpected end of JSON input") throw err;
+            }
+          }
+        }
+      }
+      if (!answer.trim()) throw new Error("انتهى الاتصال دون نص إجابة. تحقق من النموذج وإعدادات المزوّد.");
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "تعذر الاتصال بالخدمة.");
-      setMessages(old => [...old, {role:"assistant", content:"واجهة Medhat AI الجديدة جاهزة. ربط المحادثة بمحرك الذكاء الاصطناعي الحالي هو خطوة التكامل التالية؛ لم أُظهر هذه الرسالة كأنها إجابة مولّدة من نموذج.", time:new Date().toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})}]);
+      const message = e instanceof Error ? e.message : "تعذر الاتصال بالخدمة.";
+      setNotice(message);
+      setMessages(old => {
+        const last = old[old.length-1];
+        if (last?.role === "assistant" && !last.content) return old.slice(0,-1);
+        return old;
+      });
     } finally { setBusy(false); }
   }
   function uploadFiles(list: FileList | null) {
