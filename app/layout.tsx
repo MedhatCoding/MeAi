@@ -1,0 +1,14 @@
+import type { Metadata, Viewport } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Medhat AI — مساعدك الذكي",
+  description: "مساحة عمل ذكية للمحادثة والوكيل والملفات والصور والفيديو والذاكرة.",
+  applicationName: "Medhat AI",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Medhat AI" },
+};
+export const viewport: Viewport = { themeColor: "#0b0d12", width: "device-width", initialScale: 1, viewportFit: "cover" };
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="ar" dir="rtl"><body>{children}</body></html>;
+}
