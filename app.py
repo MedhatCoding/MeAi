@@ -630,11 +630,20 @@ st.markdown(f"""
   <div><div class="brand-title">Medhat <span>AI</span></div><div class="brand-subtitle">مساعدك الذكي • برمجة وتكاملات وإنجاز مهام</div></div>
 </div>
 """, unsafe_allow_html=True)
+pages = ["المحادثة", "الوكيل", "المهام", "مساحة العمل", "توليد الصور", "توليد الفيديو", "الذاكرة", "الإعدادات"]
+page_keys = {
+    "chat": "المحادثة", "agent": "الوكيل", "tasks": "المهام",
+    "workspace": "مساحة العمل", "images": "توليد الصور", "video": "توليد الفيديو",
+    "memory": "الذاكرة", "settings": "الإعدادات",
+}
+try:
+    requested_page = page_keys.get(str(st.query_params.get("page", "chat")), "المحادثة")
+    page_index = pages.index(requested_page)
+except Exception:
+    page_index = 0
 page = st.radio(
-    "القائمة",
-    ["المحادثة", "الوكيل", "المهام", "مساحة العمل", "توليد الصور", "توليد الفيديو", "الذاكرة", "الإعدادات"],
-    horizontal=True,
-    label_visibility="collapsed",
+    "القائمة", pages, index=page_index, horizontal=True,
+    label_visibility="collapsed", key="main_navigation",
 )
 configured_providers = _provider_configs()
 provider_status = "متصل" if configured_providers else "يحتاج إعداد"
