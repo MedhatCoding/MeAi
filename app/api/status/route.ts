@@ -14,6 +14,7 @@ export async function GET() {
       agentExecution: false,
       imageGeneration: false,
       videoGeneration: false,
+      webSearch: Boolean(process.env.SERPER_API_KEY),
       persistentCloudMemory: false,
     },
   }, { headers: { "Cache-Control": "no-store" } });
