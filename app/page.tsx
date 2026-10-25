@@ -91,7 +91,7 @@ export default function Home() {
     setArtifactBusy(true); setNotice("");
     try {
       const requestTask = agentPlan ? task + "\n\nخطة المهمة:\n" + agentPlan.steps.join("\n") : task;
-      const response = await fetch("/api/agent/artifact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({task:requestTask,format:"markdown"}) });
+      const response = await fetch("/api/agent/artifact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({task:requestTask,format:"markdown",documents:documents.map(d=>({name:d.name,content:d.content.slice(0,7000)}))}) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر إنشاء الملف.");
       const a = data.artifact as {filename:string;content:string;summary:string};
