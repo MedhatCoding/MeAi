@@ -22,11 +22,11 @@ export async function POST(request: NextRequest) {
       if (!item || typeof item !== "object") continue;
       const doc = item as { name?: unknown; content?: unknown };
       if (typeof doc.name !== "string" || typeof doc.content !== "string") continue;
-      const name = doc.name.replace(/[\\r\\n\\x00-\\x1f]/g, " ").slice(0, 120);
+      const name = doc.name.replace(/[\r\n\x00-\x1f]/g, " ").slice(0, 120);
       const content = doc.content.slice(0, 7000);
-      if (content.trim()) safeDocs.push(`### ${name}\\n${content}`);
+      if (content.trim()) safeDocs.push(`### ${name}\n${content}`);
     }
-    documentContext = safeDocs.join("\\n\\n").slice(0, 26000);
+    documentContext = safeDocs.join("\n\n").slice(0, 26000);
     if (body.format === "typescript" || body.format === "javascript" || body.format === "json" || body.format === "markdown" || body.format === "python" || body.format === "text") format = body.format;
   } catch { return fail("تعذر قراءة الطلب.", 400); }
 
