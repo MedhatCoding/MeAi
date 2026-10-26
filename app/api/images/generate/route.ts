@@ -1,9 +1,14 @@
 import { NextRequest } from "next/server";
+import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
+  const rateError = enforceRateLimit(request, "image-generation", 5);
+  if (rateError) return rateError;
   let prompt = "";
   let aspect = "1:1";
   try {
@@ -13,7 +18,7 @@ export async function POST(request: NextRequest) {
     if (prompt.length < 4 || prompt.length > 1800) return Response.json({ error: "الوصف يجب أن يكون بين 4 و1800 حرف." }, { status: 400 });
     if (body.aspect === "16:9" || body.aspect === "9:16") aspect = body.aspect;
     const style = typeof body.style === "string" ? body.style.slice(0, 40) : "";
-    if (style) prompt += "\\nArt direction: " + style;
+    if (style) prompt += "\nArt direction: " + style;
   } catch { return Response.json({ error: "تعذر قراءة الطلب." }, { status: 400 }); }
 
   const account = process.env.CLOUDFLARE_ACCOUNT_ID;
