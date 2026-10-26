@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     if (raw.length > 8_000) return Response.json({ error: "حجم طلب البحث أكبر من المسموح." }, { status: 413 });
     const body = JSON.parse(raw) as { query?: unknown };
     if (typeof body.query !== "string") return Response.json({ error: "اكتب عبارة البحث." }, { status: 400 });
-    query = body.query.replace(/[\\x00-\\x1f\\x7f]/g, " ").replace(/\\s+/g, " ").trim();
+    query = body.query.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
     if (query.length < 2 || query.length > 300) {
       return Response.json({ error: "عبارة البحث يجب أن تكون بين حرفين و300 حرف." }, { status: 400 });
     }
