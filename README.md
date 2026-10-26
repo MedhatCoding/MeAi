@@ -66,7 +66,36 @@ SUPABASE_SERVICE_ROLE_KEY = "YOUR_SERVER_SECRET_KEY"
 مرجع الأمان: https://supabase.com/docs/guides/getting-started/api-keys
 
 
-## مزوّدو الذكاء الاصطناعي والتبديل التلقائي\n\nيمكن إعداد Cloudflare Workers AI للمحادثة وتوليد الصور، مع مزوّدات بديلة اختيارية. يجرّب التطبيق Cloudflare أولًا في الوضع `auto` ثم ينتقل إلى المزوّدات الأخرى التي أُعدّت مفاتيحها إذا فشل الطلب. التبديل لا يخلق مفاتيح API ولا يضمن أن كل مزوّد مجاني. حصة Workers AI المجانية محدودة يوميًا؛ راجع الأسعار والموديلات الرسمية قبل الاستخدام.\n\nفي Streamlit Cloud → App settings → Secrets أضف: \n\n```toml\nAI_PROVIDER = "auto"\nCLOUDFLARE_ACCOUNT_ID = "YOUR_ACCOUNT_ID"\nCLOUDFLARE_API_TOKEN = "YOUR_WORKERS_AI_TOKEN"\nCLOUDFLARE_CHAT_MODEL = "@cf/meta/llama-3.1-8b-instruct"\nCLOUDFLARE_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell"\nIMAGE_PROVIDER = "auto"\n```\n\nأنشئ رمزًا بصلاحية Workers AI Read/Write من لوحة Cloudflare. للمحادثة يمكن إضافة `OPENROUTER_API_KEY` أو `GROQ_API_KEY` أو `CEREBRAS_API_KEY` أو `GEMINI_API_KEY` كبدائل. اختر `AI_PROVIDER = "cloudflare"` لتفضيل Cloudflare أو اسم مزوّد آخر؛ الوضع `auto` يفضّل Cloudflare ثم بقية المزودين المُعدّين. لتوليد الصور، `IMAGE_PROVIDER` يقبل `auto` أو `cloudflare` أو `openai`.\n\n## توليد الصور (اختياري)
+## مزوّدو الذكاء الاصطناعي والتبديل التلقائي
+
+يمكن إعداد Cloudflare Workers AI للمحادثة وتوليد الصور، مع مزوّدات بديلة اختيارية. إعدادات Streamlit وواجهة Next.js مختلفة؛ استخدم أسماء المتغيرات المناسبة لكل تطبيق، ولا تفترض أن إعدادات أحدهما تُفعّل الآخر.
+
+### إعدادات Streamlit
+
+في Streamlit Cloud → App settings → Secrets أضف عند الحاجة:
+
+```toml
+AI_PROVIDER = "auto"
+CLOUDFLARE_ACCOUNT_ID = "YOUR_ACCOUNT_ID"
+CLOUDFLARE_API_TOKEN = "YOUR_WORKERS_AI_TOKEN"
+CLOUDFLARE_CHAT_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+CLOUDFLARE_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell"
+IMAGE_PROVIDER = "auto"
+```
+
+للمحادثة يمكن إضافة مفاتيح مزوّدات بديلة مثل `OPENROUTER_API_KEY` أو `GROQ_API_KEY` أو `CEREBRAS_API_KEY` أو `GEMINI_API_KEY`. الوضع `auto` يختار من المزوّدات المُعدّة فقط؛ لا ينشئ مفاتيح ولا يضمن توفر حصة مجانية.
+
+### إعدادات تطبيق Next.js
+
+أضف متغيرات البيئة في منصة استضافة الويب، ولا تضع الأسرار داخل ملفات المستودع:
+
+- `CLOUDFLARE_ACCOUNT_ID` و`CLOUDFLARE_API_TOKEN` لتفعيل مزوّد Cloudflare للمحادثة والصور.
+- أو `OPENAI_BASE_URL` و`OPENAI_API_KEY` و`OPENAI_MODEL` لمزوّد متوافق مع OpenAI Chat Completions.
+- `SERPER_API_KEY` لتفعيل البحث عبر الويب والبحث المركّب.
+
+توضح نقطة النهاية `/api/status` الإمكانات المهيأة بحسب وجود الإعدادات؛ وجود الإعدادات لا يثبت أن الخدمة الخارجية تعمل حاليًا، ولا يعني أن تنفيذ الوكيل أو الذاكرة السحابية الدائمة مفعّلان.
+
+## توليد الصور (اختياري)
 
 أُضيفت صفحة **توليد الصور** داخل التطبيق. يمكن استخدام Cloudflare FLUX.1 Schnell، أو OpenAI إذا أُعدّ مفتاحه:
 
