@@ -8,10 +8,11 @@ import {
   Video, WandSparkles, X, Zap, Brain, Clock3, PanelLeftClose, PanelLeft, Sun, Moon, Trash2
 } from "lucide-react";
 
-type Section = "chat" | "agent" | "tasks" | "workspace" | "images" | "video" | "memory" | "settings";
+type Section = "chat" | "research" | "agent" | "tasks" | "workspace" | "images" | "video" | "memory" | "settings";
 type Message = { role: "user" | "assistant"; content: string; time: string };
 const nav: { id: Section; label: string; icon: typeof MessageCircle; group: string }[] = [
   { id: "chat", label: "المحادثة", icon: MessageCircle, group: "الرئيسية" },
+  { id: "research", label: "بحث الويب", icon: Search, group: "الرئيسية" },
   { id: "agent", label: "الوكيل الذكي", icon: Bot, group: "الرئيسية" },
   { id: "tasks", label: "المهام", icon: Layers3, group: "الرئيسية" },
   { id: "workspace", label: "مساحة العمل", icon: FolderOpen, group: "الأدوات" },
@@ -36,6 +37,9 @@ export default function Home() {
   const [section, setSection] = useState<Section>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [researchQuery, setResearchQuery] = useState("");
+  const [researchBusy, setResearchBusy] = useState(false);
+  const [researchData, setResearchData] = useState<{title:string;url:string;snippet:string;date:string|null;position:number|null}[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [dark, setDark] = useState(true);
@@ -105,6 +109,19 @@ export default function Home() {
   function downloadArtifact(a:{filename:string;content:string}) {
     const url = URL.createObjectURL(new Blob([a.content], {type:"text/plain;charset=utf-8"}));
     const link = document.createElement("a"); link.href=url; link.download=a.filename; link.click(); URL.revokeObjectURL(url);
+  }
+
+  async function runResearch() {
+    const query=researchQuery.trim(); if(query.length<2||researchBusy) return;
+    setResearchBusy(true); setNotice(""); setResearchData([]);
+    try {
+      const response=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query})});
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.error||"تعذر البحث.");
+      setResearchData(Array.isArray(data.results)?data.results:[]);
+      if(!data.results?.length) setNotice("لم تظهر نتائج. جرّب عبارة بحث أدق.");
+    } catch(e) { setNotice(e instanceof Error?e.message:"تعذر البحث حاليًا."); }
+    finally { setResearchBusy(false); }
   }
 
   async function sendMessage(value = input) {
@@ -211,6 +228,7 @@ export default function Home() {
       <header className="topbar"><div className="topbar-left">{!sidebarOpen&&<button className="icon-btn" onClick={()=>setSidebarOpen(true)} aria-label="إظهار القائمة"><PanelLeft size={19}/></button>}<button className="icon-btn mobile-menu" onClick={()=>setMobileNavOpen(v=>!v)} aria-label="القائمة"><Menu size={19}/></button><div className="crumb">{active.label}<ChevronDown size={15}/></div><span className="topbar-badge"><span/> نسخة الويب الجديدة</span></div><div className="topbar-right"><button className="icon-btn" onClick={()=>setDark(v=>!v)} aria-label="تغيير المظهر">{dark?<Sun size={18}/>:<Moon size={18}/>}</button><button className="help-btn" onClick={()=>setNotice("Medhat AI — الواجهة الجديدة. التكاملات الخلفية تُربط تدريجيًا.")}><CircleHelp size={17}/><span>مساعدة</span></button><div className="avatar small-avatar">م</div></div></header>
       {mobileNavOpen&&<button className="mobile-scrim" onClick={()=>setMobileNavOpen(false)} aria-label="إغلاق القائمة"/>}
       <div className="content-area">
+        {section==="research"&&<div className="section-page"><div className="page-heading"><div className="page-icon blue"><Search size={22}/></div><div><div className="eyebrow">بحث عام عبر الويب</div><h1>ابحث في أي موضوع</h1><p>اعثر على صفحات ومراجع أولية، وافتح المصدر لمراجعة التفاصيل بنفسك.</p></div></div><form className="research-search" onSubmit={e=>{e.preventDefault();void runResearch();}}><input value={researchQuery} onChange={e=>setResearchQuery(e.target.value)} maxLength={300} minLength={2} placeholder="اكتب موضوع البحث أو سؤالًا..." aria-label="عبارة البحث"/><button className="primary-btn" type="submit" disabled={researchBusy||researchQuery.trim().length<2}>{researchBusy?<Activity size={16} className="spin"/>:<Search size={16}/>} {researchBusy?"جاري البحث":"ابحث"}</button></form><div className="research-note"><ShieldCheck size={16}/><span>النتائج مختصرات من محرك البحث وليست تحققًا مستقلًا. راجع المصدر وتاريخ النشر قبل الاعتماد عليها.</span></div><div className="research-results">{researchData.map((r,i)=><article className="list-card research-card" key={r.url+i}><div className="list-header"><span className="pill">نتيجة {r.position??i+1}</span>{r.date&&<small>{r.date}</small>}</div><h3><a href={r.url} target="_blank" rel="noopener noreferrer">{r.title}</a></h3><p>{r.snippet||"لا يوجد وصف متاح."}</p><a className="research-source" href={r.url} target="_blank" rel="noopener noreferrer">{(()=>{try{return new URL(r.url).hostname}catch{return r.url}})()} ↗</a></article>)}</div>{researchData.length===0&&!researchBusy&&<div className="empty-inline">ابدأ بكتابة موضوع للبحث. البحث متاح لأي مجال، وليس مجالًا واحدًا.</div>}</div>}
         {section==="chat"&&<div className={`chat-page ${messages.length?"has-messages":""}`}>
           {messages.length===0 ? <div className="welcome-wrap"><div className="welcome-orb"><div className="orb-core"><Sparkles size={30}/></div><i className="orb-ring ring-one"/><i className="orb-ring ring-two"/></div><div className="eyebrow"><span/> مساحة الذكاء الاصطناعي الخاصة بك</div><h1>أهلًا بيك، <em>مدحت</em></h1><p className="welcome-sub">أنا جاهز أساعدك تفكّر، تبرمج، تبحث، وتحوّل أفكارك لخطوات عملية.</p><div className="suggestion-grid">{suggestions.map(s=><button key={s.title} className="suggestion-card" onClick={()=>sendMessage(s.prompt)}><div className="suggestion-icon"><s.icon size={19}/></div><span>{s.title}</span><ArrowUp size={15}/></button>)}</div></div>
           : <div className="conversation">{messages.map((m,i)=><div className={`message-row ${m.role}`} key={i}><div className={`message-avatar ${m.role}`}>{m.role==="assistant"?<Sparkles size={17}/>:<span>م</span>}</div><div className="message-main"><div className="message-meta"><b>{m.role==="assistant"?"Medhat AI":"أنت"}</b><time>{m.time}</time></div><div className="message-text">{m.content}</div></div></div>)}{busy&&<div className="message-row assistant"><div className="message-avatar assistant"><Sparkles size={17}/></div><div className="typing"><i/><i/><i/> جاري التفكير</div></div>}<div ref={endRef}/></div>}
