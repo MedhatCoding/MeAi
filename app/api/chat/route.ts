@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       if (!item || typeof item !== "object") return [];
       const doc = item as {name?:unknown;content?:unknown};
       if (typeof doc.name !== "string" || typeof doc.content !== "string") return [];
-      return [{ name: doc.name.replace(/[\\x00-\\x1f\\x7f]/g, "").slice(0, 120), content: doc.content.slice(0, 7000) }];
+      return [{ name: doc.name.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 120), content: doc.content.slice(0, 7000) }];
     }) : [];
     docContext = docs.length ? docs.map((d,i) => `[ملف مرفق ${i+1}: ${d.name}]\n${d.content}`).join("\n\n").slice(0, 26000) : "";
   } catch {
