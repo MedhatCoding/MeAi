@@ -12,7 +12,7 @@ export async function GET() {
     features: {
       chat: Boolean(provider),
       agentExecution: false,
-      imageGeneration: false,
+      imageGeneration: Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN),
       videoGeneration: false,
       webSearch: Boolean(process.env.SERPER_API_KEY),
       persistentCloudMemory: false,
