@@ -13,7 +13,16 @@ export async function POST(request: NextRequest) {
   let messages: ChatMessage[];
   let docContext = "";
   try {
-    const body = await request.json() as { messages?: unknown; documents?: unknown };
+    // Reject oversized payloads before JSON parsing to reduce memory/cost abuse.
+    const declaredLength = Number(request.headers.get("content-length") || "0");
+    if (Number.isFinite(declaredLength) && declaredLength > 1_500_000) {
+      return jsonError("حجم الطلب أكبر من الحد المسموح (1.5MB). قلّل المرفقات أو ابدأ محادثة جديدة.", 413);
+    }
+    const rawBody = await request.text();
+    if (rawBody.length > 1_500_000) {
+      return jsonError("حجم الطلب أكبر من الحد المسموح (1.5MB). قلّل المرفقات أو ابدأ محادثة جديدة.", 413);
+    }
+    const body = JSON.parse(rawBody) as { messages?: unknown; documents?: unknown };
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
       return jsonError("أرسل رسالة واحدة على الأقل.", 400);
     }
