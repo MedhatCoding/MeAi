@@ -12,15 +12,26 @@ function jsonError(message: string, status: number) {
 export async function POST(request: NextRequest) {
   let messages: ChatMessage[];
   try {
-    const body = await request.json() as { messages?: ChatMessage[] };
+    const body = await request.json() as { messages?: unknown };
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
       return jsonError("أرسل رسالة واحدة على الأقل.", 400);
     }
-    messages = body.messages.filter((m) =>
-      m && ["system", "user", "assistant"].includes(m.role) &&
-      typeof m.content === "string" && m.content.length <= 100_000
-    );
-    if (!messages.length) return jsonError("صيغة الرسائل غير صحيحة.", 400);
+    if (body.messages.length > 60) return jsonError("المحادثة طويلة جدًا؛ ابدأ محادثة جديدة أو اختصر السياق.", 413);
+    const incoming = body.messages as unknown[];
+    if (incoming.some((item) => !item || typeof item !== "object" ||
+      !["user", "assistant"].includes(String((item as {role?:unknown}).role)) ||
+      typeof (item as {content?:unknown}).content !== "string" ||
+      ((item as {content:string}).content.length > 30_000))) {
+      return jsonError("صيغة الرسائل غير صحيحة أو تتجاوز الحد المسموح.", 400);
+    }
+    messages = incoming.map((item) => {
+      const m = item as {role:"user"|"assistant";content:string};
+      return {role:m.role,content:m.content};
+    });
+    const totalChars = messages.reduce((sum,m)=>sum+m.content.length,0);
+    if (totalChars > 120_000) return jsonError("حجم سياق المحادثة أكبر من الحد المسموح (120 ألف حرف).", 413);
+    // Bound provider cost while retaining enough recent conversational context.
+    messages = messages.slice(-40);
   } catch {
     return jsonError("تعذر قراءة الطلب.", 400);
   }
@@ -87,8 +98,7 @@ export async function POST(request: NextRequest) {
     return jsonError("تعذر الاتصال بمزوّد الذكاء الاصطناعي. تحقق من الاتصال والإعدادات.", 502);
   }
   if (!upstream.ok) {
-    const detail = (await upstream.text()).slice(0, 700);
-    return jsonError(`فشل المزوّد (${upstream.status}): ${detail}`, 502);
+    return jsonError(`تعذر إكمال الرد من مزوّد الذكاء الاصطناعي (رمز ${upstream.status}). تحقق من إعدادات المزوّد أو جرّب لاحقًا.`, 502);
   }
   if (!upstream.body) return jsonError("المزوّد لم يُرجع تدفقًا للرد.", 502);
 
