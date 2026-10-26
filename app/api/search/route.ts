@@ -1,49 +1,14 @@
 import { NextRequest } from "next/server";
+import { rejectCrossOrigin, enforceRateLimit } from "../_lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Best-effort per-instance abuse guard. Use host-level/shared rate limiting for
-// multi-instance deployments; this map intentionally stores no query contents.
-const windows = new Map<string, { start: number; count: number }>();
-const WINDOW_MS = 60_000;
-const MAX_REQUESTS = 12;
-
-function allowedOrigin(request: NextRequest) {
-  const origin = request.headers.get("origin");
-  if (!origin) return true; // non-browser clients may omit Origin
-  try {
-    return new URL(origin).host === request.headers.get("host");
-  } catch {
-    return false;
-  }
-}
-
-function isRateLimited(request: NextRequest) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const key = forwarded || request.headers.get("x-real-ip") || "unknown";
-  const now = Date.now();
-  // Opportunistically discard expired entries to bound memory.
-  for (const [id, entry] of windows) if (now - entry.start >= WINDOW_MS) windows.delete(id);
-  const entry = windows.get(key);
-  if (!entry || now - entry.start >= WINDOW_MS) {
-    windows.set(key, { start: now, count: 1 });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > MAX_REQUESTS;
-}
-
 export async function POST(request: NextRequest) {
-  if (!allowedOrigin(request)) {
-    return Response.json({ error: "مصدر الطلب غير مسموح." }, { status: 403 });
-  }
-  if (isRateLimited(request)) {
-    return Response.json({ error: "طلبات البحث كثيرة. انتظر دقيقة ثم حاول مجددًا." }, {
-      status: 429,
-      headers: { "Retry-After": "60", "Cache-Control": "no-store" },
-    });
-  }
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
+  const rateError = enforceRateLimit(request, "search", 12);
+  if (rateError) return rateError;
 
   const declaredLength = Number(request.headers.get("content-length") || "0");
   if (Number.isFinite(declaredLength) && declaredLength > 8_000) {
