@@ -34,7 +34,11 @@ export async function POST(request: NextRequest) {
     if (contentType.includes("application/json")) {
       const payload = await upstream.json() as { result?: { image?: unknown } };
       if (typeof payload.result?.image !== "string") return Response.json({ error: "المزوّد لم يُرجع صورة قابلة للعرض." }, { status: 502 });
-      const raw = payload.result.image.replace(/^data:image\\/[^;]+;base64,/, "");
+      const encoded = payload.result.image;
+      const comma = encoded.indexOf(",");
+      const raw = encoded.startsWith("data:image/") && comma >= 0 ? encoded.slice(comma + 1) : encoded;
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(raw)) return Response.json({ error: "صيغة الصورة التي أرجعها المزوّد غير صالحة." }, { status: 502 });
+      bytes = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
       bytes = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
     } else {
       mime = contentType.startsWith("image/") ? contentType.split(";")[0] : "image/png";
