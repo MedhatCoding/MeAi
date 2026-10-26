@@ -113,7 +113,7 @@ export default function Home() {
     const next: Message[] = [...messages, { role: "user", content: text, time: now() }, { role: "assistant", content: "", time: now() }];
     setMessages(next); setInput(""); setBusy(true); setNotice("");
     try {
-      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: next.slice(0,-1).map(m => ({role:m.role, content:m.content})) }) });
+      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: next.slice(0,-1).map(m => ({role:m.role, content:m.content})), documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,7000) })) }) });
       if (!res.ok) {
         let detail = "فشل الاتصال بخدمة الذكاء الاصطناعي.";
         try { const data = await res.json() as {error?:string}; if (data.error) detail = data.error; } catch {}
