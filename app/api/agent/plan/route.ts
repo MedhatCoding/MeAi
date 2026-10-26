@@ -1,4 +1,4 @@
-import { rejectCrossOrigin, enforceRateLimit } from "../_lib/guard";
+import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
