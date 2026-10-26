@@ -1,3 +1,4 @@
+import { rejectCrossOrigin, enforceRateLimit } from "../_lib/guard";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -8,6 +9,10 @@ function error(message: string, status: number) {
 }
 
 export async function POST(request: NextRequest) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
+  const rateError = enforceRateLimit(request, "agent-plan", 12);
+  if (rateError) return rateError;
   let task = "";
   try {
     const body = await request.json() as { task?: unknown };
