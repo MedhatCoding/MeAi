@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { rejectCrossOrigin, enforceRateLimit } from "../_lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,9 +11,17 @@ function fail(message: string, status: number) {
 }
 
 export async function POST(request: NextRequest) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
+  const rateError = enforceRateLimit(request, "research", 8);
+  if (rateError) return rateError;
   let query = "";
   try {
-    const body = await request.json() as { query?: unknown };
+    const declaredLength = Number(request.headers.get("content-length") || "0");
+    if (Number.isFinite(declaredLength) && declaredLength > 16_000) return fail("حجم طلب البحث أكبر من المسموح.", 413);
+    const raw = await request.text();
+    if (raw.length > 16_000) return fail("حجم طلب البحث أكبر من المسموح.", 413);
+    const body = JSON.parse(raw) as { query?: unknown };
     if (typeof body.query !== "string") return fail("اكتب سؤال البحث.", 400);
     query = body.query.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
     if (query.length < 4 || query.length > 1200) return fail("السؤال يجب أن يكون بين 4 و1200 حرف.", 400);
