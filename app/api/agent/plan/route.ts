@@ -58,14 +58,31 @@ export async function POST(request: NextRequest) {
     const payload = await response.json() as { choices?: { message?: { content?: unknown } }[] };
     const value = payload.choices?.[0]?.message?.content;
     if (typeof value !== "string") return error("المزوّد لم يُرجع خطة نصية.", 502);
-    raw = value.trim().replace(/^\x60{3}(?:json)?\s*/i, "").replace(/\s*\x60{3}$/i, "");
-    const parsed = JSON.parse(raw) as { summary?: unknown; steps?: unknown; limitations?: unknown };
-    if (typeof parsed.summary !== "string" || !Array.isArray(parsed.steps) || !parsed.steps.every(x => typeof x === "string")) {
-      return error("صيغة الخطة التي أعادها المزوّد غير صالحة. جرّب صياغة الطلب بشكل أبسط.", 502);
+    raw = value.trim();
+    // Models sometimes wrap JSON in prose/fences or emit harmless trailing commas.
+    const candidates = [raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")];
+    const first = raw.indexOf("{"), last = raw.lastIndexOf("}");
+    if (first >= 0 && last > first) candidates.push(raw.slice(first, last + 1));
+    let parsed: { summary?: unknown; steps?: unknown; limitations?: unknown } | null = null;
+    for (const candidate of candidates) {
+      try {
+        const normalized = candidate.replace(/,\s*([}\]])/g, "$1");
+        const value = JSON.parse(normalized) as unknown;
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          parsed = value as { summary?: unknown; steps?: unknown; limitations?: unknown };
+          break;
+        }
+      } catch { /* try the next bounded candidate */ }
     }
+    if (!parsed || typeof parsed.summary !== "string" || !Array.isArray(parsed.steps) ||
+      !parsed.steps.every(x => typeof x === "string")) {
+      return error("المزوّد أعاد خطة بتنسيق غير صالح. أعد المحاولة؛ لم يتم تنفيذ أي إجراء.", 502);
+    }
+    const steps = parsed.steps.filter((x): x is string => typeof x === "string").map(x => x.trim()).filter(Boolean).slice(0, 6);
+    if (steps.length < 1) return error("الخطة لا تحتوي على خطوات قابلة للعرض. أعد المحاولة.", 502);
     const plan = {
-      summary: parsed.summary.slice(0, 300),
-      steps: parsed.steps.slice(0, 6).map(x => x.slice(0, 500)),
+      summary: parsed.summary.trim().slice(0, 300),
+      steps: steps.map(x => x.slice(0, 500)),
       limitations: Array.isArray(parsed.limitations) ? parsed.limitations.filter((x): x is string => typeof x === "string").slice(0, 5).map(x => x.slice(0, 400)) : ["هذه خطة فقط؛ التنفيذ الفعلي للملفات غير مفعّل في واجهة الويب."],
     };
     if (!plan.steps.length) return error("الخطة لا تحتوي على خطوات. جرّب طلبًا أكثر تحديدًا.", 502);
