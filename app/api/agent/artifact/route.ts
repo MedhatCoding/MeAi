@@ -9,6 +9,8 @@ function fail(message: string, status: number) {
 }
 
 export async function POST(request: NextRequest) {
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > 64_000) return fail("حجم الطلب أكبر من الحد المسموح.", 413);
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
   const rateError = enforceRateLimit(request, "agent-artifact", 12);
