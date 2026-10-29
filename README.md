@@ -92,6 +92,7 @@ IMAGE_PROVIDER = "auto"
 - `CLOUDFLARE_ACCOUNT_ID` و`CLOUDFLARE_API_TOKEN` لتفعيل مزوّد Cloudflare للمحادثة والصور.
 - أو `OPENAI_BASE_URL` و`OPENAI_API_KEY` و`OPENAI_MODEL` لمزوّد متوافق مع OpenAI Chat Completions.
 - `SERPER_API_KEY` لتفعيل البحث عبر الويب والبحث المركّب.
+- `MEAI_AGENT_ALLOWED_EMAILS` قائمة عناوين البريد المؤكدة المسموح لها بتنفيذ إجراءات GitHub الحساسة، مفصولة بفواصل. لا تفعّل `MEAI_AGENT_EDIT_ENABLED=true` إلا بعد ضبط هذه القائمة وتأمين حساب Supabase وGitHub token.
 
 توضح نقطة النهاية `/api/status` الإمكانات المهيأة بحسب وجود الإعدادات؛ وجود الإعدادات لا يثبت أن الخدمة الخارجية تعمل حاليًا، ولا يعني أن تنفيذ الوكيل أو الذاكرة السحابية الدائمة مفعّلان.
 
