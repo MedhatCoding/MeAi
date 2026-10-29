@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       // Split multi-part requests into a small number of focused queries instead of sending
       // the whole prompt once. Keep the original query first and cap external calls.
       const clauses = task
-        .split(/(?:\\n+|[؛;؟?]+|\\s+و(?:كمان|أيضًا)\\s+|\\s+بالإضافة إلى\\s+)/i)
+        .split(/(?:\n+|[؛;؟?]+|\s+و(?:كمان|أيضًا)\s+|\s+بالإضافة إلى\s+)/i)
         .map((part) => part.trim().replace(/\s+/g, " "))
         .filter((part) => part.length >= 12 && part.length <= 300);
       const queries = [...new Set([...agentPlan.searchQueries, task.replace(/\s+/g, " ").slice(0, 300), ...clauses])].slice(0, 3);
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             try {
               const u = new URL(item.link);
               if (!["http:", "https:"].includes(u.protocol)) return [];
-              return [{ title: item.title.slice(0, 250), url: u.toString(), date: typeof item.date === "string" ? item.date.slice(0, 80) : undefined, text: `- ${item.title.slice(0, 250)}\\n  ${typeof item.snippet === "string" ? item.snippet.slice(0, 700) : ""}\\n  ${typeof item.date === "string" ? "التاريخ: " + item.date.slice(0, 80) + "\\n  " : ""}${u.toString()}` }];
+              return [{ title: item.title.slice(0, 250), url: u.toString(), date: typeof item.date === "string" ? item.date.slice(0, 80) : undefined, text: `- ${item.title.slice(0, 250)}\n  ${typeof item.snippet === "string" ? item.snippet.slice(0, 700) : ""}\n  ${typeof item.date === "string" ? "التاريخ: " + item.date.slice(0, 80) + "\n  " : ""}${u.toString()}` }];
             } catch { return []; }
           });
         } catch { return []; }
