@@ -60,11 +60,34 @@ export async function GET(request: NextRequest) {
 
   const cloudflare = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
   const compatible = Boolean(process.env.OPENAI_BASE_URL && process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL);
+  const [cloudflareResult, compatibleResult] = await Promise.all([
+    cloudflare ? (async () => {
+      try {
+        const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(process.env.CLOUDFLARE_ACCOUNT_ID!)}/ai/models/search?search=${encodeURIComponent(process.env.CLOUDFLARE_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct")}`, {
+          headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, Accept: "application/json" },
+          cache: "no-store",
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: response.ok, status: response.status };
+      } catch { return { ok: false, status: 0 }; }
+    })() : Promise.resolve({ ok: false, status: -1 }),
+    compatible ? (async () => {
+      try {
+        const base = process.env.OPENAI_BASE_URL!.trim().replace(/\\/+$/, "");
+        const response = await fetch(`${base}/models`, {
+          headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, Accept: "application/json" },
+          cache: "no-store",
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: response.ok, status: response.status };
+      } catch { return { ok: false, status: 0 }; }
+    })() : Promise.resolve({ ok: false, status: -1 }),
+  ]);
   connectors.push(
     { id: "google", label: "Google Workspace", configured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET), connected: false, verified: false, mode: "OAuth required", detail: "وجود بيانات OAuth وحده لا يعني أن المستخدم فوّض التطبيق. تدفق OAuth غير مكتمل." },
     { id: "supabase", label: "Supabase", configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY), connected: false, verified: false, mode: "Project configuration", detail: "تم رصد الإعدادات فقط؛ لم يتم اختبار تسجيل الدخول أو سياسات RLS." },
-    { id: "cloudflare-ai", label: "Cloudflare Workers AI", configured: cloudflare, connected: false, verified: false, mode: "AI provider", detail: cloudflare ? "الإعدادات موجودة؛ لم يتم إجراء اختبار حي من نقطة التكامل." : "بيانات المزوّد غير مهيأة." },
-    { id: "openai-compatible", label: "OpenAI-compatible provider", configured: compatible, connected: false, verified: false, mode: "AI provider fallback", detail: compatible ? "الإعدادات موجودة؛ لم يتم إجراء اختبار حي من نقطة التكامل." : "بيانات المزوّد غير مهيأة." },
+    { id: "cloudflare-ai", label: "Cloudflare Workers AI", configured: cloudflare, connected: cloudflareResult.ok, verified: cloudflareResult.status !== -1, mode: "AI provider", detail: !cloudflare ? "بيانات المزوّد غير مهيأة." : cloudflareResult.ok ? "نجح اختبار حي لواجهة قائمة النماذج باستخدام بيانات الخادم." : cloudflareResult.status === 0 ? "تعذر الوصول إلى Cloudflare أثناء الفحص." : `فشل اختبار Cloudflare (HTTP ${cloudflareResult.status})؛ راجع الرمز والصلاحيات والحساب.` },
+    { id: "openai-compatible", label: "OpenAI-compatible provider", configured: compatible, connected: compatibleResult.ok, verified: compatibleResult.status !== -1, mode: "AI provider fallback", detail: !compatible ? "بيانات المزوّد غير مهيأة." : compatibleResult.ok ? "نجح اختبار حي لنقطة /models باستخدام بيانات الخادم." : compatibleResult.status === 0 ? "تعذر الوصول إلى مزوّد OpenAI-compatible أثناء الفحص." : `فشل اختبار المزوّد (HTTP ${compatibleResult.status})؛ راجع عنوان API والرمز.` },
   );
 
   return Response.json({
