@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
           const data = await r.json() as { content?: string; encoding?: string; name?: string };
           if (data.encoding !== "base64" || typeof data.content !== "string") return "";
           const decoded = Buffer.from(data.content.replace(/\s/g, ""), "base64").toString("utf8");
-          return \`--- \${path} ---\n\${decoded.slice(0, 7000)}\`;
+          return `--- ${path} ---\n${decoded.slice(0, 7000)}`;
         }));
         const sourceContext = results.filter(Boolean).join("\n\n").slice(0, 16000);
         if (sourceContext) githubContext += `\n\nRead-only project files (current default branch; use as evidence, not as a local checkout):\n${sourceContext}\nThese files were read only. Do not claim code was modified or tests were run.`;
