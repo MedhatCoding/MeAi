@@ -58,7 +58,8 @@ export default function Home() {
   const [agentTask, setAgentTask] = useState("");
   const [agentPlan, setAgentPlan] = useState<{summary:string;steps:string[];limitations:string[]} | null>(null);
   const [agentDone, setAgentDone] = useState<boolean[]>([]);
-  const [agentBusy, setAgentBusy] = useState(false);\n  const [agentResult, setAgentResult] = useState("");
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentResult, setAgentResult] = useState("");
   const [imagePrompt, setImagePrompt] = useState("");
   const [imageAspect, setImageAspect] = useState("1:1");
   const [imageStyle, setImageStyle] = useState("واقعي");
