@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
   const wantsSearch = /ابحث|بحث|مصادر|مراجع|آخر|أحدث|اليوم|الأخبار|خبر|حالي|حديث|research|search|latest|today|news|sources|current|recent|قارن.*(?:مصادر|معلومات|أسعار)|تحقق من|هل صحيح|ما الجديد/i.test(task);
   let evidence = "";
   let searchUsed = false;
+  let searchSources: { title: string; url: string; date?: string }[] = [];
   if (wantsSearch && process.env.SERPER_API_KEY) {
     try {
       // Split multi-part requests into a small number of focused queries instead of sending
@@ -76,17 +77,19 @@ export async function POST(request: NextRequest) {
             try {
               const u = new URL(item.link);
               if (!["http:", "https:"].includes(u.protocol)) return [];
-              return [{ url: u.toString(), text: `- ${item.title.slice(0, 250)}\\n  ${typeof item.snippet === "string" ? item.snippet.slice(0, 700) : ""}\\n  ${typeof item.date === "string" ? "التاريخ: " + item.date.slice(0, 80) + "\\n  " : ""}${u.toString()}` }];
+              return [{ title: item.title.slice(0, 250), url: u.toString(), date: typeof item.date === "string" ? item.date.slice(0, 80) : undefined, text: `- ${item.title.slice(0, 250)}\\n  ${typeof item.snippet === "string" ? item.snippet.slice(0, 700) : ""}\\n  ${typeof item.date === "string" ? "التاريخ: " + item.date.slice(0, 80) + "\\n  " : ""}${u.toString()}` }];
             } catch { return []; }
           });
         } catch { return []; }
       }));
       const seen = new Set<string>();
-      evidence = responses.flat().filter((item) => {
+      const uniqueResults = responses.flat().filter((item) => {
         if (seen.has(item.url)) return false;
         seen.add(item.url);
         return true;
-      }).slice(0, 10).map((item) => item.text).join("\\n\\n");
+      }).slice(0, 10);
+      searchSources = uniqueResults.map(({ title, url, date }) => ({ title, url, ...(date ? { date } : {}) }));
+      evidence = uniqueResults.map((item) => item.text).join("\\n\\n");
       searchUsed = Boolean(evidence);
     } catch { /* Continue without search; the response must disclose this. */ }
   }
@@ -166,7 +169,7 @@ export async function POST(request: NextRequest) {
     const payload = await response.json() as { choices?: { message?: { content?: unknown } }[] };
     const answer = payload.choices?.[0]?.message?.content;
     if (typeof answer !== "string" || !answer.trim()) return fail("لم يرجع المزوّد نتيجة قابلة للعرض.", 502);
-    return Response.json({ answer: answer.trim().slice(0, 30000), searchUsed, provider: accountId && cloudflareToken ? "Cloudflare Workers AI" : "OpenAI-compatible API", limitations: ["الوكيل ينجز المهام المعرفية ويستخدم البحث إذا كان مهيأً؛ لا يملك صلاحية عامة للتحكم في كل حساب أو موقع. الموصلات الخارجية تحتاج ربطًا وصلاحيات فعلية."] }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ answer: answer.trim().slice(0, 30000), searchUsed, searchSources, toolsUsed: [...(searchUsed ? ["web_search"] : []), ...(githubContext ? ["github_read"] : []), ...(docs ? ["file_analysis"] : [])], provider: accountId && cloudflareToken ? "Cloudflare Workers AI" : "OpenAI-compatible API", limitations: ["الوكيل ينجز المهام المعرفية ويستخدم البحث إذا كان مهيأً؛ لا يملك صلاحية عامة للتحكم في كل حساب أو موقع. الموصلات الخارجية تحتاج ربطًا وصلاحيات فعلية."] }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return fail("انتهت مهلة التنفيذ أو تعذر الاتصال بمزوّد الذكاء الاصطناعي.", 502);
   }
