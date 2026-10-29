@@ -6,10 +6,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = process.env.MEAI_GOOGLE_REDIRECT_URI;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const secret = process.env.MEAI_SESSION_SECRET;
-  if (!clientId || !redirectUri || !siteUrl || !secret || secret.length < 32) {
+  if (!clientId || !clientSecret || !redirectUri || !siteUrl || !secret || secret.length < 32) {
     return NextResponse.json({ error: "يلزم ضبط GOOGLE_CLIENT_ID وGOOGLE_CLIENT_SECRET وMEAI_GOOGLE_REDIRECT_URI وNEXT_PUBLIC_SITE_URL وMEAI_SESSION_SECRET (32 حرفًا على الأقل)." }, { status: 503 });
   }
   let callback: URL;
