@@ -33,7 +33,23 @@ export async function GET(request: NextRequest) {
       if (response.ok) {
         const user = await response.json() as { login?: unknown };
         const login = typeof user.login === "string" ? user.login : "حساب GitHub";
-        connectors.push({ id: "github", label: "GitHub", configured: true, connected: true, verified: true, mode: "GitHub REST API", detail: `تم التحقق من صلاحية الرمز للهوية: ${login}. هذا لا يثبت صلاحية الوصول لكل مستودع أو تنفيذ كتابة.` });
+        const repo = (process.env.MEAI_GITHUB_REPOSITORY || "MedhatCoding/MeAi").trim();
+        if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) {
+          connectors.push({ id: "github", label: "GitHub", configured: true, connected: false, verified: true, mode: "GitHub REST API", detail: "الرمز صالح، لكن MEAI_GITHUB_REPOSITORY غير صالح." });
+        } else {
+          const repoResponse = await fetch(`https://api.github.com/repos/${repo}`, {
+            headers: { Authorization: `Bearer ${githubToken}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+            cache: "no-store",
+            signal: AbortSignal.timeout(5000),
+          });
+          if (repoResponse.ok) {
+            const repository = await repoResponse.json() as { full_name?: string; html_url?: string; permissions?: { pull?: boolean; push?: boolean } };
+            const permissions = repository.permissions;
+            connectors.push({ id: "github", label: "GitHub", configured: true, connected: true, verified: true, mode: "GitHub REST API", detail: `تم التحقق من الهوية ${login} والوصول إلى المستودع ${repository.full_name || repo}. قراءة المستودع تعمل؛ صلاحية الكتابة: ${permissions?.push === true ? "متاحة حسب GitHub" : permissions?.push === false ? "غير متاحة" : "غير مؤكدة"}.` });
+          } else {
+            connectors.push({ id: "github", label: "GitHub", configured: true, connected: false, verified: true, mode: "GitHub REST API", detail: `الرمز صالح للهوية ${login}، لكن الوصول إلى المستودع ${repo} فشل (HTTP ${repoResponse.status}). تحقق من اسم المستودع وصلاحيات الرمز.` });
+          }
+        }
       } else {
         connectors.push({ id: "github", label: "GitHub", configured: true, connected: false, verified: true, mode: "GitHub REST API", detail: response.status === 401 ? "رمز GitHub غير صالح أو منتهي." : `تعذر التحقق من الرمز (HTTP ${response.status}).` });
       }
