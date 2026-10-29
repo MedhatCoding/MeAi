@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Archive, ArrowDown, ArrowUp, AudioLines, Bot, Check, ChevronDown, CircleHelp,
   Code2, Command, FileText, FolderOpen, Image as ImageIcon, Layers3, Menu, MessageCircle,
-  MoreHorizontal, Paperclip, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, SquarePen,
+  MoreHorizontal, Paperclip, Plus, Plug, Search, Send, Settings2, ShieldCheck, Sparkles, SquarePen,
   Video, WandSparkles, X, Zap, Brain, Clock3, PanelLeftClose, PanelLeft, Sun, Moon, Trash2
 } from "lucide-react";
 
