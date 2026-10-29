@@ -79,7 +79,7 @@ export function setGoogleSessionCookie(response: NextResponse, value: string, ma
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/api/integrations/google",
+    path: "/api/integrations",
     maxAge,
   });
 }
