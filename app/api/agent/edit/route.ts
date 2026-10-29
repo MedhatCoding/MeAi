@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
   const rateError = enforceRateLimit(request, "agent-edit", 3);
   if (rateError) return rateError;
 
+  if (process.env.MEAI_AGENT_EDIT_ENABLED !== "true") return error("تعديل ملفات GitHub متوقف افتراضيًا لحماية المستودع. فعّله صراحةً بعد تأمين الوصول إلى التطبيق عبر إعداد MEAI_AGENT_EDIT_ENABLED=true على الخادم.", 403);
+
   const token = process.env.GITHUB_TOKEN;
   if (!token) return error("تكامل GitHub غير مهيأ على الخادم؛ لم يتم تعديل أي ملف.", 503);
   const ownerRepo = (process.env.MEAI_GITHUB_REPOSITORY || "MedhatCoding/MeAi").trim();
