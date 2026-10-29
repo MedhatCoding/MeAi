@@ -19,6 +19,10 @@ export async function POST(request: NextRequest) {
   const rateError = enforceRateLimit(request, "workspace-publish", 4);
   if (rateError) return rateError;
 
+  const { requireAllowedAccount } = await import("../../_lib/allowed-account");
+  const account = await requireAllowedAccount(request);
+  if (!account) return error("يلزم تسجيل الدخول بحساب مؤكّد وموجود ضمن MEAI_AGENT_ALLOWED_EMAILS لنشر ملفات مساحة العمل.", 403);
+
   const token = process.env.GITHUB_TOKEN;
   if (!token) return error("تكامل GitHub غير مهيأ على الخادم.", 503);
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(ownerRepo) || !/^[A-Za-z0-9_.-]{1,100}$/.test(branch)) {
