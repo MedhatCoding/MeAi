@@ -1,5 +1,6 @@
 import { rejectCrossOrigin } from "../_lib/guard";
-import { NextRequest } from "next/server";
+import { getGoogleAccess, setGoogleSessionCookie } from "../_lib/google-session";
+import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,16 +96,20 @@ export async function GET(request: NextRequest) {
       } catch { return { ok: false, status: 0 }; }
     })() : Promise.resolve({ ok: false, status: -1 }),
   ]);
+  const googleSession = await getGoogleAccess(request);
+  const googleConfigured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.MEAI_GOOGLE_REDIRECT_URI && process.env.MEAI_SESSION_SECRET);
   connectors.push(
-    { id: "google", label: "Google Workspace", configured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET), connected: false, verified: false, mode: "OAuth required", detail: "وجود بيانات OAuth وحده لا يعني أن المستخدم فوّض التطبيق. تدفق OAuth غير مكتمل." },
+    { id: "google", label: "Google Workspace", configured: googleConfigured, connected: Boolean(googleSession), verified: Boolean(googleSession), mode: "OAuth / Drive / Calendar read-only", detail: !googleConfigured ? "أكمل إعدادات Google OAuth وMEAI_SESSION_SECRET." : googleSession ? "تم التحقق من جلسة Google؛ يمكن قراءة ملفات Drive وأحداث التقويم القادمة." : "بيانات OAuth مهيأة لكن لم يتم ربط حساب Google في هذا المتصفح." },
     { id: "supabase", label: "Supabase", configured: supabase, connected: supabaseResult.ok, verified: supabaseResult.status !== -1, mode: "Project health", detail: !supabase ? "بيانات المشروع غير مهيأة." : supabaseResult.ok ? "نجح فحص حي لخدمة Auth؛ هذا لا يثبت إعداد قاعدة البيانات أو سياسات RLS." : supabaseResult.status === 0 ? "تعذر الوصول إلى Supabase أثناء الفحص." : `فشل فحص Supabase (HTTP ${supabaseResult.status})؛ تحقق من رابط المشروع ومفتاح anon.` },
     { id: "cloudflare-ai", label: "Cloudflare Workers AI", configured: cloudflare, connected: cloudflareResult.ok, verified: cloudflareResult.status !== -1, mode: "AI provider", detail: !cloudflare ? "بيانات المزوّد غير مهيأة." : cloudflareResult.ok ? "نجح اختبار حي لواجهة قائمة النماذج باستخدام بيانات الخادم." : cloudflareResult.status === 0 ? "تعذر الوصول إلى Cloudflare أثناء الفحص." : `فشل اختبار Cloudflare (HTTP ${cloudflareResult.status})؛ راجع الرمز والصلاحيات والحساب.` },
     { id: "openai-compatible", label: "OpenAI-compatible provider", configured: compatible, connected: compatibleResult.ok, verified: compatibleResult.status !== -1, mode: "AI provider fallback", detail: !compatible ? "بيانات المزوّد غير مهيأة." : compatibleResult.ok ? "نجح اختبار حي لنقطة /models باستخدام بيانات الخادم." : compatibleResult.status === 0 ? "تعذر الوصول إلى مزوّد OpenAI-compatible أثناء الفحص." : `فشل اختبار المزوّد (HTTP ${compatibleResult.status})؛ راجع عنوان API والرمز.` },
   );
 
-  return Response.json({
+  const result = NextResponse.json({
     checkedAt: new Date().toISOString(),
     connectors,
     note: "verified يعني اختبارًا حيًا محدودًا ومحددًا فقط. لا تُرسل أسرار المزوّد إلى المتصفح.",
   }, { headers: { "Cache-Control": "no-store" } });
+  if (googleSession?.cookie) setGoogleSessionCookie(result, googleSession.cookie);
+  return result;
 }
