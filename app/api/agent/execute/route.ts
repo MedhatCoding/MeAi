@@ -61,9 +61,9 @@ export async function POST(request: NextRequest) {
       // the whole prompt once. Keep the original query first and cap external calls.
       const clauses = task
         .split(/(?:\\n+|[؛;؟?]+|\\s+و(?:كمان|أيضًا)\\s+|\\s+بالإضافة إلى\\s+)/i)
-        .map((part) => part.trim().replace(/\\s+/g, " "))
+        .map((part) => part.trim().replace(/\s+/g, " "))
         .filter((part) => part.length >= 12 && part.length <= 300);
-      const queries = [...new Set([...agentPlan.searchQueries, task.replace(/\\s+/g, " ").slice(0, 300), ...clauses])].slice(0, 3);
+      const queries = [...new Set([...agentPlan.searchQueries, task.replace(/\s+/g, " ").slice(0, 300), ...clauses])].slice(0, 3);
       const responses = await Promise.all(queries.map(async (q) => {
         try {
           const r = await fetch("https://google.serper.dev/search", {
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
         return true;
       }).slice(0, 10);
       searchSources = uniqueResults.map(({ title, url, date }) => ({ title, url, ...(date ? { date } : {}) }));
-      evidence = uniqueResults.map((item) => item.text).join("\\n\\n");
+      evidence = uniqueResults.map((item) => item.text).join("\n\n");
       searchUsed = Boolean(evidence);
       toolTrace.push({ tool: "web_search", status: searchUsed ? "success" : "failed", detail: searchUsed ? `تم جمع ${searchSources.length} نتيجة فريدة من البحث.` : "البحث لم يُرجع نتائج قابلة للاستخدام." });
     } catch { toolTrace.push({ tool: "web_search", status: "failed", detail: "تعذر إكمال البحث؛ سيُذكر القيد في الإجابة." }); }
