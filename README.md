@@ -138,3 +138,21 @@ OPENAI_IMAGE_MODEL = "gpt-image-2"
 - اختيار الأدوات لا يمنح الوكيل صلاحيات shell أو التحكم العام في المواقع والحسابات. تعديل ملفات GitHub ما زال مسارًا منفصلًا، معطلًا افتراضيًا ويتطلب تأمين الوصول قبل تفعيله.
 - نجاح فحوصات GitHub Actions يثبت اجتياز فحوصات الكود فقط؛ لا يثبت أن مفاتيح الاستضافة أو قاعدة Supabase أو نشر الموقع مهيأة.
 
+## ربط Google Workspace فعليًا (Drive وCalendar للقراءة)
+
+توجد الآن رحلة OAuth باستخدام PKCE، وتُخزّن جلسة Google في cookie مشفّر بـ AES-GCM وخصائص HttpOnly، مع تحديث access token عند توافر refresh token. الأفعال الحالية للقراءة فقط: قائمة ملفات Drive وأحداث التقويم القادمة.
+
+1. أنشئ OAuth Client من نوع Web application في Google Cloud Console، وفعّل Google Drive API وGoogle Calendar API.
+2. أضف عنوان callback التالي إلى Authorized redirect URIs في Google Cloud:
+   `https://YOUR_DEPLOYMENT_HOST/api/integrations/google/callback`
+3. اضبط متغيرات البيئة في استضافة Next.js:
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+   - `MEAI_GOOGLE_REDIRECT_URI` — يجب أن يطابق عنوان callback حرفيًا.
+   - `NEXT_PUBLIC_SITE_URL` — أصل الموقع المنشور مثل `https://your-app.example.com`.
+   - `MEAI_SESSION_SECRET` — سر عشوائي قوي لا يقل عن 32 حرفًا، ولا تضعه في Git.
+4. من الإعدادات اضغط «ربط حساب Google»، وافق على النطاقات المطلوبة، ثم جرّب عرض ملفات Drive والتقويم.
+5. افصل الحساب من زر «فصل Google». اختبر انتهاء الجلسة وإلغاء صلاحيات التطبيق من إعدادات حساب Google.
+
+لا يرسل التطبيق access/refresh tokens إلى JavaScript؛ تخزّن الجلسة داخل cookie مشفّر HttpOnly. ومع ذلك، لا تُفعّل النطاقات الإضافية قبل مراجعة سياسة الخصوصية ومتطلبات شاشة الموافقة في Google Cloud.
+
