@@ -4,7 +4,7 @@ export type AgentToolPlan = {
   tools: AgentToolName[];
   searchQueries: string[];
   githubPaths: string[];
-  plannerStatus: "success" | "fallback";
+  plannerStatus: "success" | "fallback" | "skipped";
 };
 
 const allowedTools = new Set<AgentToolName>([
