@@ -24,6 +24,9 @@ export async function POST(request: NextRequest) {
   if (rateError) return rateError;
 
   if (process.env.MEAI_AGENT_EDIT_ENABLED !== "true") return error("تعديل ملفات GitHub متوقف افتراضيًا لحماية المستودع. فعّله صراحةً بعد تأمين الوصول إلى التطبيق عبر إعداد MEAI_AGENT_EDIT_ENABLED=true على الخادم.", 403);
+  const { requireAllowedAccount } = await import("../../_lib/allowed-account");
+  const account = await requireAllowedAccount(request);
+  if (!account) return error("يلزم تسجيل الدخول بحساب مؤكّد وموجود ضمن MEAI_AGENT_ALLOWED_EMAILS لتنفيذ تعديلات GitHub.", 403);
 
   const token = process.env.GITHUB_TOKEN;
   if (!token) return error("تكامل GitHub غير مهيأ على الخادم؛ لم يتم تعديل أي ملف.", 503);
