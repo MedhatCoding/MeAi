@@ -1,5 +1,5 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
-import { planAgentTools } from "../../_lib/agent-planner";
+import { fallbackAgentToolPlan, planAgentTools } from "../../_lib/agent-planner";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -49,7 +49,10 @@ export async function POST(request: NextRequest) {
     token = key; model = openAiModel;
   } else return fail("خدمة الذكاء الاصطناعي غير مهيأة على الاستضافة.", 503);
 
-  const agentPlan = await planAgentTools({ task, documentCount: documents.length, endpoint, token, model });
+  const candidatePlan = fallbackAgentToolPlan(task, documents.length);
+  const agentPlan = candidatePlan.tools.length
+    ? await planAgentTools({ task, documentCount: documents.length, endpoint, token, model })
+    : { ...candidatePlan, plannerStatus: "skipped" as const };
   const wantsSearch = agentPlan.tools.includes("web_search");
   let evidence = "";
   let searchUsed = false;
@@ -213,7 +216,7 @@ export async function POST(request: NextRequest) {
     const toolsUsed = [...(searchUsed ? ["web_search"] : []), ...(githubReadSucceeded ? ["github_read"] : []), ...(githubFilesRead > 0 ? ["github_source_read"] : []), ...(docs ? ["file_analysis"] : [])];
     if (docs) toolTrace.push({ tool: "file_analysis", status: "success", detail: `تم إرفاق ${documents.length} ملف/ملفات للتحليل.` });
     else toolTrace.push({ tool: "file_analysis", status: "skipped", detail: "لم يرفق المستخدم ملفات." });
-    toolTrace.unshift({ tool: "agent_planner", status: agentPlan.plannerStatus === "success" ? "success" : "unavailable", detail: agentPlan.plannerStatus === "success" ? `اختار النموذج الأدوات: ${agentPlan.tools.join("، ") || "لا توجد أدوات خارجية"}.` : "تعذر تخطيط الأدوات؛ استُخدم اختيار احتياطي محدود." });
+    toolTrace.unshift({ tool: "agent_planner", status: agentPlan.plannerStatus === "success" ? "success" : agentPlan.plannerStatus === "skipped" ? "skipped" : "unavailable", detail: agentPlan.plannerStatus === "success" ? `اختار النموذج الأدوات: ${agentPlan.tools.join("، ") || "لا توجد أدوات خارجية"}.` : agentPlan.plannerStatus === "skipped" ? "لم تكن هناك حاجة لأداة خارجية؛ تم تجاوز التخطيط الإضافي لتقليل التأخير." : "تعذر تخطيط الأدوات؛ استُخدم اختيار احتياطي محدود." });
     return Response.json({ answer: finalAnswer, searchUsed, searchSources, toolsUsed, toolTrace, provider: accountId && cloudflareToken ? "Cloudflare Workers AI" : "OpenAI-compatible API", limitations: ["الوكيل ينجز المهام المعرفية ويستخدم البحث إذا كان مهيأً؛ لا يملك صلاحية عامة للتحكم في كل حساب أو موقع. الموصلات الخارجية تحتاج ربطًا وصلاحيات فعلية."] }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return fail("انتهت مهلة التنفيذ أو تعذر الاتصال بمزوّد الذكاء الاصطناعي.", 502);
