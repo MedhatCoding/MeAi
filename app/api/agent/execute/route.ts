@@ -117,14 +117,17 @@ export async function POST(request: NextRequest) {
       try {
         const headers: Record<string, string> = { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
         if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
-        const paths = ["README.md", "package.json", "app/api/status/route.ts"];
+        const requestedPaths = [...task.matchAll(/(?:^|[\\s\x60"'(])((?:app|src|components|lib|pages|public|tests?|scripts)\\/[A-Za-z0-9_./-]+\\.(?:ts|tsx|js|jsx|mjs|cjs|json|css|md|py|sql|yml|yaml)|(?:README\\.md|package\\.json|tsconfig\\.json|next\\.config\\.[cm]?[jt]s))/g)].map(m => m[1]);
+        const paths = [...new Set(requestedPaths.map(path => path.replace(/^\\/+/, "")))].filter(path => !path.split("/").includes("..") && !/(?:^|\\/)\\.env(?:\\.|$)|(?:^|\\/)(?:secrets?|credentials?)(?:\\.|\\/|$)/i.test(path)).slice(0, 3);
+        if (!paths.length) paths.push("README.md", "package.json", "app/api/status/route.ts");
         const results = await Promise.all(paths.map(async (path) => {
-          const r = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, { headers, cache: "no-store", signal: AbortSignal.timeout(6000) });
+          const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+          const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}`, { headers, cache: "no-store", signal: AbortSignal.timeout(6000) });
           if (!r.ok) return "";
           const data = await r.json() as { content?: string; encoding?: string; name?: string };
           if (data.encoding !== "base64" || typeof data.content !== "string") return "";
-          const decoded = Buffer.from(data.content.replace(/\s/g, ""), "base64").toString("utf8");
-          return `--- ${path} ---\n${decoded.slice(0, 7000)}`;
+          const decoded = Buffer.from(data.content.replace(/\\s/g, ""), "base64").toString("utf8");
+          return `--- ${path} ---\\n${decoded.slice(0, 7000)}`;
         }));
         const sourceContext = results.filter(Boolean).join("\n\n").slice(0, 16000);
         if (sourceContext) githubContext += `\n\nRead-only project files (current default branch; use as evidence, not as a local checkout):\n${sourceContext}\nThese files were read only. Do not claim code was modified or tests were run.`;
