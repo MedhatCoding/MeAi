@@ -97,6 +97,7 @@ export async function planAgentTools(input: {
       ? [...new Set(parsed.tools.filter((value): value is AgentToolName => typeof value === "string" && allowedTools.has(value as AgentToolName)))]
         .filter((tool) => tool !== "file_analysis" || input.documentCount > 0)
       : [];
+    if (tools.includes("github_source_read") && !tools.includes("github_read")) tools.push("github_read");
     const searchQueries = Array.isArray(parsed.searchQueries)
       ? [...new Set(parsed.searchQueries.filter((value): value is string => typeof value === "string" && value.trim().length >= 3 && value.length <= 300).map(value => value.trim()))].slice(0, 3)
       : [];
