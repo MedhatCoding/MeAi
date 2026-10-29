@@ -182,11 +182,39 @@ export async function POST(request: NextRequest) {
     const payload = await response.json() as { choices?: { message?: { content?: unknown } }[] };
     const answer = payload.choices?.[0]?.message?.content;
     if (typeof answer !== "string" || !answer.trim()) return fail("لم يرجع المزوّد نتيجة قابلة للعرض.", 502);
+    let finalAnswer = answer.trim().slice(0, 30000);
+    let reviewStatus: "success" | "unavailable" = "unavailable";
+    try {
+      const reviewResponse = await fetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          temperature: 0.15,
+          stream: false,
+          messages: [
+            { role: "system", content: "You are a strict completion reviewer. Check whether the draft directly fulfils the user's request, covers every requested part, uses supplied evidence correctly, and avoids claiming actions that were not confirmed. If it is complete, return it unchanged. If incomplete, produce a corrected complete answer. Do not invent tool results, citations, or capabilities. Answer in the same language as the draft." },
+            { role: "user", content: `Original task:\n${task}\n\nAvailable evidence:\n${githubContext.slice(0, 6000)}\n${evidence.slice(0, 6000)}\n\nDraft answer to review:\n${finalAnswer}` }
+          ]
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(12000),
+      });
+      if (reviewResponse.ok) {
+        const reviewPayload = await reviewResponse.json() as { choices?: { message?: { content?: unknown } }[] };
+        const reviewed = reviewPayload.choices?.[0]?.message?.content;
+        if (typeof reviewed === "string" && reviewed.trim()) {
+          finalAnswer = reviewed.trim().slice(0, 30000);
+          reviewStatus = "success";
+        }
+      }
+    } catch { /* Keep the initial answer if the bounded review cannot complete. */ }
+    toolTrace.push({ tool: "agent_review", status: reviewStatus, detail: reviewStatus === "success" ? "تمت مراجعة الإجابة مرة واحدة ومحاولة سد أي نقص قبل عرضها." : "تعذرت المراجعة الإضافية؛ عُرضت الإجابة الأولية دون ادعاء اكتمال المراجعة." });
     const toolsUsed = [...(searchUsed ? ["web_search"] : []), ...(githubReadSucceeded ? ["github_read"] : []), ...(githubFilesRead > 0 ? ["github_source_read"] : []), ...(docs ? ["file_analysis"] : [])];
     if (docs) toolTrace.push({ tool: "file_analysis", status: "success", detail: `تم إرفاق ${documents.length} ملف/ملفات للتحليل.` });
     else toolTrace.push({ tool: "file_analysis", status: "skipped", detail: "لم يرفق المستخدم ملفات." });
     toolTrace.unshift({ tool: "agent_planner", status: agentPlan.plannerStatus === "success" ? "success" : "unavailable", detail: agentPlan.plannerStatus === "success" ? `اختار النموذج الأدوات: ${agentPlan.tools.join("، ") || "لا توجد أدوات خارجية"}.` : "تعذر تخطيط الأدوات؛ استُخدم اختيار احتياطي محدود." });
-    return Response.json({ answer: answer.trim().slice(0, 30000), searchUsed, searchSources, toolsUsed, toolTrace, provider: accountId && cloudflareToken ? "Cloudflare Workers AI" : "OpenAI-compatible API", limitations: ["الوكيل ينجز المهام المعرفية ويستخدم البحث إذا كان مهيأً؛ لا يملك صلاحية عامة للتحكم في كل حساب أو موقع. الموصلات الخارجية تحتاج ربطًا وصلاحيات فعلية."] }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ answer: finalAnswer, searchUsed, searchSources, toolsUsed, toolTrace, provider: accountId && cloudflareToken ? "Cloudflare Workers AI" : "OpenAI-compatible API", limitations: ["الوكيل ينجز المهام المعرفية ويستخدم البحث إذا كان مهيأً؛ لا يملك صلاحية عامة للتحكم في كل حساب أو موقع. الموصلات الخارجية تحتاج ربطًا وصلاحيات فعلية."] }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return fail("انتهت مهلة التنفيذ أو تعذر الاتصال بمزوّد الذكاء الاصطناعي.", 502);
   }
