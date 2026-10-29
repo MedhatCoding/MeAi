@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
         if (!paths.length) paths.push("README.md", "package.json", "app/api/status/route.ts");
         const results = await Promise.all(paths.map(async (path) => {
           const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-          const r = await fetch(\`https://api.github.com/repos/\${repo}/contents/\${encodedPath}\`, { headers, cache: "no-store", signal: AbortSignal.timeout(6000) });
+          const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}`, { headers, cache: "no-store", signal: AbortSignal.timeout(6000) });
           if (!r.ok) return "";
           const data = await r.json() as { content?: string; encoding?: string; name?: string };
           if (data.encoding !== "base64" || typeof data.content !== "string") return "";
