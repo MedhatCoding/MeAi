@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     })() : Promise.resolve({ ok: false, status: -1 }),
     compatible ? (async () => {
       try {
-        const base = process.env.OPENAI_BASE_URL!.trim().replace(/\\/+$/, "");
+        const base = process.env.OPENAI_BASE_URL!.trim().replace(/[/]+$/, "");
         const response = await fetch(`${base}/models`, {
           headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, Accept: "application/json" },
           cache: "no-store",
