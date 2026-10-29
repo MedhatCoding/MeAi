@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
     features: {
       chat: Boolean(provider),
       agentPlanning: Boolean(provider),
-      // These remain false until a sandboxed executor with explicit approval is deployed.
-      agentExecution: false,
+      // The general-purpose agent can perform model-backed work and bounded read-only integrations; it is not a shell/code sandbox.
+      agentExecution: Boolean(provider),
       imageGeneration: cloudflare,
       videoGeneration: false,
       webSearch: Boolean(process.env.SERPER_API_KEY),
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     readiness: {
       chat: provider ? "configured_not_live_tested" : "missing_provider",
       webSearch: process.env.SERPER_API_KEY ? "configured_not_live_tested" : "missing_api_key",
-      github: githubConfigured ? "configured_check_integrations_endpoint" : "missing_token",
+      github: githubConfigured ? "token_configured_identity_and_repository_access_must_be_checked" : "missing_token",
       cloudMemory: supabaseConfigured ? "project_configured_auth_and_rls_unverified" : "missing_supabase_config",
       google: googleOAuthConfigured ? "oauth_credentials_only_flow_incomplete" : "missing_oauth_credentials",
     },
