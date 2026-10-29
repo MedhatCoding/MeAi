@@ -48,30 +48,46 @@ export async function POST(request: NextRequest) {
     token = key; model = openAiModel;
   } else return fail("خدمة الذكاء الاصطناعي غير مهيأة على الاستضافة.", 503);
 
-  const wantsSearch = /ابحث|بحث|مصادر|مراجع|آخر|أحدث|اليوم|الأخبار|خبر|حالي|حديث|research|search|latest|today|news|sources|current|recent/i.test(task);
+  const wantsSearch = /ابحث|بحث|مصادر|مراجع|آخر|أحدث|اليوم|الأخبار|خبر|حالي|حديث|research|search|latest|today|news|sources|current|recent|قارن.*(?:مصادر|معلومات|أسعار)|تحقق من|هل صحيح|ما الجديد/i.test(task);
   let evidence = "";
   let searchUsed = false;
   if (wantsSearch && process.env.SERPER_API_KEY) {
     try {
-      const r = await fetch("https://google.serper.dev/search", {
-        method: "POST",
-        headers: { "X-API-KEY": process.env.SERPER_API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ q: task.slice(0, 300), gl: "eg", hl: "ar", num: 6 }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(9000),
-      });
-      if (r.ok) {
-        const data = await r.json() as { organic?: { title?: unknown; link?: unknown; snippet?: unknown; date?: unknown }[] };
-        evidence = (Array.isArray(data.organic) ? data.organic : []).slice(0, 6).flatMap((item) => {
-          if (typeof item.title !== "string" || typeof item.link !== "string") return [];
-          try {
-            const u = new URL(item.link);
-            if (!["http:", "https:"].includes(u.protocol)) return [];
-            return [`- ${item.title.slice(0, 250)}\n  ${typeof item.snippet === "string" ? item.snippet.slice(0, 700) : ""}\n  ${typeof item.date === "string" ? "التاريخ: " + item.date.slice(0, 80) + "\n  " : ""}${u.toString()}`];
-          } catch { return []; }
-        }).join("\n\n");
-        searchUsed = Boolean(evidence);
-      }
+      // Split multi-part requests into a small number of focused queries instead of sending
+      // the whole prompt once. Keep the original query first and cap external calls.
+      const clauses = task
+        .split(/(?:\\n+|[؛;؟?]+|\\s+و(?:كمان|أيضًا)\\s+|\\s+بالإضافة إلى\\s+)/i)
+        .map((part) => part.trim().replace(/\\s+/g, " "))
+        .filter((part) => part.length >= 12 && part.length <= 300);
+      const queries = [...new Set([task.replace(/\\s+/g, " ").slice(0, 300), ...clauses])].slice(0, 3);
+      const responses = await Promise.all(queries.map(async (q) => {
+        try {
+          const r = await fetch("https://google.serper.dev/search", {
+            method: "POST",
+            headers: { "X-API-KEY": process.env.SERPER_API_KEY!, "Content-Type": "application/json" },
+            body: JSON.stringify({ q, gl: "eg", hl: "ar", num: 5 }),
+            cache: "no-store",
+            signal: AbortSignal.timeout(9000),
+          });
+          if (!r.ok) return [];
+          const data = await r.json() as { organic?: { title?: unknown; link?: unknown; snippet?: unknown; date?: unknown }[] };
+          return (Array.isArray(data.organic) ? data.organic : []).flatMap((item) => {
+            if (typeof item.title !== "string" || typeof item.link !== "string") return [];
+            try {
+              const u = new URL(item.link);
+              if (!["http:", "https:"].includes(u.protocol)) return [];
+              return [{ url: u.toString(), text: `- ${item.title.slice(0, 250)}\\n  ${typeof item.snippet === "string" ? item.snippet.slice(0, 700) : ""}\\n  ${typeof item.date === "string" ? "التاريخ: " + item.date.slice(0, 80) + "\\n  " : ""}${u.toString()}` }];
+            } catch { return []; }
+          });
+        } catch { return []; }
+      }));
+      const seen = new Set<string>();
+      evidence = responses.flat().filter((item) => {
+        if (seen.has(item.url)) return false;
+        seen.add(item.url);
+        return true;
+      }).slice(0, 10).map((item) => item.text).join("\\n\\n");
+      searchUsed = Boolean(evidence);
     } catch { /* Continue without search; the response must disclose this. */ }
   }
 
