@@ -1,4 +1,5 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
+import { planAgentTools } from "../../_lib/agent-planner";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -48,7 +49,8 @@ export async function POST(request: NextRequest) {
     token = key; model = openAiModel;
   } else return fail("خدمة الذكاء الاصطناعي غير مهيأة على الاستضافة.", 503);
 
-  const wantsSearch = /ابحث|بحث|مصادر|مراجع|آخر|أحدث|اليوم|الأخبار|خبر|حالي|حديث|research|search|latest|today|news|sources|current|recent|قارن.*(?:مصادر|معلومات|أسعار)|تحقق من|هل صحيح|ما الجديد/i.test(task);
+  const agentPlan = await planAgentTools({ task, documentCount: documents.length, endpoint, token, model });
+  const wantsSearch = agentPlan.tools.includes("web_search");
   let evidence = "";
   let searchUsed = false;
   let searchSources: { title: string; url: string; date?: string }[] = [];
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
         .split(/(?:\\n+|[؛;؟?]+|\\s+و(?:كمان|أيضًا)\\s+|\\s+بالإضافة إلى\\s+)/i)
         .map((part) => part.trim().replace(/\\s+/g, " "))
         .filter((part) => part.length >= 12 && part.length <= 300);
-      const queries = [...new Set([task.replace(/\\s+/g, " ").slice(0, 300), ...clauses])].slice(0, 3);
+      const queries = [...new Set([...agentPlan.searchQueries, task.replace(/\\s+/g, " ").slice(0, 300), ...clauses])].slice(0, 3);
       const responses = await Promise.all(queries.map(async (q) => {
         try {
           const r = await fetch("https://google.serper.dev/search", {
@@ -103,7 +105,7 @@ export async function POST(request: NextRequest) {
   let githubContext = "";
   let githubReadSucceeded = false;
   let githubFilesRead = 0;
-  const githubIntent = /github|مستودع|المستودع|ريبو|كود المشروع|issues?|pull request|طلبات السحب|commits?|الكوميت|الالتزامات/i.test(task);
+  const githubIntent = agentPlan.tools.includes("github_read");
   const githubToken = process.env.GITHUB_TOKEN;
   if (githubIntent) {
     const repo = (process.env.MEAI_GITHUB_REPOSITORY || "MedhatCoding/MeAi").trim();
@@ -137,14 +139,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const projectIntent = /المشروع|الكود|ملفات|ملف|bug|خطأ برمجي|إصلاح|تطوير|feature|implement|codebase|source code/i.test(task);
+  const projectIntent = agentPlan.tools.includes("github_source_read");
   if (githubIntent && projectIntent) {
     const repo = (process.env.MEAI_GITHUB_REPOSITORY || "MedhatCoding/MeAi").trim();
     if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) {
       try {
         const headers: Record<string, string> = { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
         if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
-        const requestedPaths = [...task.matchAll(/(?:^|[\s\x60"'(])((?:app|src|components|lib|pages|public|tests?|scripts)\/[A-Za-z0-9_./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|css|md|py|sql|yml|yaml)|(?:README\.md|package\.json|tsconfig\.json|next\.config\.[cm]?[jt]s))/g)].map(m => m[1]);
+        const requestedPaths = agentPlan.githubPaths;
         const paths = [...new Set(requestedPaths.map(path => path.replace(/^\/+/, "")))].filter(path => !path.split("/").includes("..") && !/(?:^|\/)\.env(?:\.|$)|(?:^|\/)(?:secrets?|credentials?)(?:\.|\/|$)/i.test(path)).slice(0, 3);
         if (!paths.length) paths.push("README.md", "package.json", "app/api/status/route.ts");
         const results = await Promise.all(paths.map(async (path) => {
@@ -183,6 +185,7 @@ export async function POST(request: NextRequest) {
     const toolsUsed = [...(searchUsed ? ["web_search"] : []), ...(githubReadSucceeded ? ["github_read"] : []), ...(githubFilesRead > 0 ? ["github_source_read"] : []), ...(docs ? ["file_analysis"] : [])];
     if (docs) toolTrace.push({ tool: "file_analysis", status: "success", detail: `تم إرفاق ${documents.length} ملف/ملفات للتحليل.` });
     else toolTrace.push({ tool: "file_analysis", status: "skipped", detail: "لم يرفق المستخدم ملفات." });
+    toolTrace.unshift({ tool: "agent_planner", status: agentPlan.plannerStatus === "success" ? "success" : "unavailable", detail: agentPlan.plannerStatus === "success" ? `اختار النموذج الأدوات: ${agentPlan.tools.join("، ") || "لا توجد أدوات خارجية"}.` : "تعذر تخطيط الأدوات؛ استُخدم اختيار احتياطي محدود." });
     return Response.json({ answer: answer.trim().slice(0, 30000), searchUsed, searchSources, toolsUsed, toolTrace, provider: accountId && cloudflareToken ? "Cloudflare Workers AI" : "OpenAI-compatible API", limitations: ["الوكيل ينجز المهام المعرفية ويستخدم البحث إذا كان مهيأً؛ لا يملك صلاحية عامة للتحكم في كل حساب أو موقع. الموصلات الخارجية تحتاج ربطًا وصلاحيات فعلية."] }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return fail("انتهت مهلة التنفيذ أو تعذر الاتصال بمزوّد الذكاء الاصطناعي.", 502);
