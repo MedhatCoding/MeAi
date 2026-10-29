@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const provider = cloudflare ? "Cloudflare Workers AI" : compatible ? "OpenAI-compatible API" : null;
   const githubConfigured = Boolean(process.env.GITHUB_TOKEN);
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  const googleOAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const googleOAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.MEAI_GOOGLE_REDIRECT_URI && process.env.NEXT_PUBLIC_SITE_URL && process.env.MEAI_SESSION_SECRET && process.env.MEAI_SESSION_SECRET.length >= 32);
 
   return Response.json({
     checkedAt: new Date().toISOString(),
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       github: githubConfigured ? "token_configured_identity_and_repository_access_must_be_checked" : "missing_token",
       githubSourceEditing: process.env.MEAI_AGENT_EDIT_ENABLED === "true" && githubConfigured ? "explicitly_enabled" : "disabled_by_default",
       cloudMemory: supabaseConfigured ? "project_configured_auth_and_rls_unverified" : "missing_supabase_config",
-      google: googleOAuthConfigured ? "oauth_credentials_only_flow_incomplete" : "missing_oauth_credentials",
+      google: googleOAuthConfigured ? "oauth_flow_implemented_account_consent_required_and_google_apis_must_be_enabled" : "missing_oauth_configuration",
     },
   }, { headers: { "Cache-Control": "no-store" } });
 }
