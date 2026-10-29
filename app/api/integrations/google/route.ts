@@ -13,8 +13,13 @@ export async function GET(request: NextRequest) {
   const rateError = enforceRateLimit(request, "google-read", 20);
   if (rateError) return rateError;
   const view = request.nextUrl.searchParams.get("view");
-  if (view !== "drive" && view !== "calendar") return fail("حدد view=drive أو view=calendar.", 400);
+  if (view !== "drive" && view !== "calendar" && view !== "status") return fail("حدد view=drive أو view=calendar أو view=status.", 400);
   const session = await getGoogleAccess(request);
+  if (view === "status") {
+    const response = NextResponse.json({ ok: true, connected: Boolean(session) }, { headers: { "Cache-Control": "no-store" } });
+    if (session?.cookie) setGoogleSessionCookie(response, session.cookie);
+    return response;
+  }
   if (!session) return fail("Google غير مربوط أو انتهت صلاحيته. أعد ربط الحساب من الإعدادات.", 401);
 
   try {
