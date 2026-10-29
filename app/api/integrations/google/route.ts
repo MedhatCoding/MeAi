@@ -52,7 +52,7 @@ export async function DELETE(request: NextRequest) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/api/integrations/google",
+    path: "/api/integrations",
     maxAge: 0,
   });
   return response;
