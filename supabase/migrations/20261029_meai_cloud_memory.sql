@@ -27,3 +27,10 @@ create policy "Users can update their own MeAI memory"
   with check (auth.uid() = user_id);
 
 grant select, insert, update on public.meai_user_memory to authenticated;
+
+-- Bound row size even if a client bypasses the application API.
+alter table public.meai_user_memory
+  drop constraint if exists meai_user_memory_payload_size_check;
+alter table public.meai_user_memory
+  add constraint meai_user_memory_payload_size_check
+  check (octet_length(payload::text) <= 140000);
