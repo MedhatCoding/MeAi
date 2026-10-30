@@ -4,6 +4,46 @@ import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type CloudMemoryPayload = {
+  version: 1;
+  messages?: { role: "user" | "assistant"; content: string; time: string }[];
+  tasks?: { title: string; done: boolean }[];
+  memories?: string[];
+  documents?: { name: string; content: string; size: number; updatedAt: string }[];
+  artifacts?: { filename: string; content: string; summary: string; createdAt: string }[];
+};
+
+function validatePayload(value: unknown): value is CloudMemoryPayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const p = value as Record<string, unknown>;
+  const allowed = new Set(["version", "messages", "tasks", "memories", "documents", "artifacts"]);
+  if (Object.keys(p).some((key) => !allowed.has(key)) || p.version !== 1) return false;
+  if (p.messages !== undefined && (!Array.isArray(p.messages) || p.messages.length > 30 ||
+    p.messages.some((x) => !x || typeof x !== "object" || Array.isArray(x) ||
+      !["user", "assistant"].includes(String((x as Record<string, unknown>).role)) ||
+      typeof (x as Record<string, unknown>).content !== "string" || ((x as Record<string, unknown>).content as string).length > 1000 ||
+      typeof (x as Record<string, unknown>).time !== "string" || ((x as Record<string, unknown>).time as string).length > 64))) return false;
+  if (p.tasks !== undefined && (!Array.isArray(p.tasks) || p.tasks.length > 30 ||
+    p.tasks.some((x) => !x || typeof x !== "object" || Array.isArray(x) ||
+      typeof (x as Record<string, unknown>).title !== "string" || ((x as Record<string, unknown>).title as string).length > 180 ||
+      typeof (x as Record<string, unknown>).done !== "boolean"))) return false;
+  if (p.memories !== undefined && (!Array.isArray(p.memories) || p.memories.length > 30 ||
+    p.memories.some((x) => typeof x !== "string" || x.length > 200))) return false;
+  if (p.documents !== undefined && (!Array.isArray(p.documents) || p.documents.length > 5 ||
+    p.documents.some((x) => !x || typeof x !== "object" || Array.isArray(x) ||
+      typeof (x as Record<string, unknown>).name !== "string" || ((x as Record<string, unknown>).name as string).length > 120 ||
+      typeof (x as Record<string, unknown>).content !== "string" || ((x as Record<string, unknown>).content as string).length > 2500 ||
+      typeof (x as Record<string, unknown>).size !== "number" || !Number.isFinite((x as Record<string, unknown>).size) ||
+      typeof (x as Record<string, unknown>).updatedAt !== "string" || ((x as Record<string, unknown>).updatedAt as string).length > 64))) return false;
+  if (p.artifacts !== undefined && (!Array.isArray(p.artifacts) || p.artifacts.length > 3 ||
+    p.artifacts.some((x) => !x || typeof x !== "object" || Array.isArray(x) ||
+      typeof (x as Record<string, unknown>).filename !== "string" || ((x as Record<string, unknown>).filename as string).length > 180 ||
+      typeof (x as Record<string, unknown>).content !== "string" || ((x as Record<string, unknown>).content as string).length > 3500 ||
+      typeof (x as Record<string, unknown>).summary !== "string" || ((x as Record<string, unknown>).summary as string).length > 500 ||
+      typeof (x as Record<string, unknown>).createdAt !== "string" || ((x as Record<string, unknown>).createdAt as string).length > 64))) return false;
+  return true;
+}
+
 function fail(message: string, status: number) {
   return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -56,9 +96,9 @@ export async function PUT(request: NextRequest) {
   let payload: unknown;
   try {
     const raw = await request.text();
-    if (raw.length > 120_000) return fail("البيانات أكبر من الحد المسموح للمزامنة (120KB).", 413);
+    if (Buffer.byteLength(raw, "utf8") > 120_000) return fail("البيانات أكبر من الحد المسموح للمزامنة (120KB).", 413);
     const body = JSON.parse(raw) as { payload?: unknown };
-    if (!body.payload || typeof body.payload !== "object" || Array.isArray(body.payload)) return fail("صيغة بيانات المزامنة غير صالحة.", 400);
+    if (!validatePayload(body.payload)) return fail("صيغة بيانات المزامنة غير صالحة أو تحتوي عناصر تتجاوز الحدود المسموحة.", 400);
     payload = body.payload;
   } catch { return fail("تعذر قراءة بيانات المزامنة.", 400); }
 
