@@ -1,5 +1,5 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
-import { fallbackAgentToolPlan, planAgentTools } from "../../_lib/agent-planner";
+import { planAgentTools } from "../../_lib/agent-planner";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -49,10 +49,7 @@ export async function POST(request: NextRequest) {
     token = key; model = openAiModel;
   } else return fail("خدمة الذكاء الاصطناعي غير مهيأة على الاستضافة.", 503);
 
-  const candidatePlan = fallbackAgentToolPlan(task, documents.length);
-  const agentPlan = candidatePlan.tools.length
-    ? await planAgentTools({ task, documentCount: documents.length, endpoint, token, model })
-    : { ...candidatePlan, plannerStatus: "skipped" as const };
+  const agentPlan = await planAgentTools({ task, documentCount: documents.length, endpoint, token, model });
   const wantsSearch = agentPlan.tools.includes("web_search");
   let evidence = "";
   let searchUsed = false;
