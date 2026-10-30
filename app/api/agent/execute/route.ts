@@ -21,17 +21,28 @@ export async function POST(request: NextRequest) {
   let documents: { name: string; content: string }[] = [];
   try {
     const raw = await request.text();
-    if (raw.length > 1_200_000) return fail("حجم الطلب أكبر من الحد المسموح.", 413);
+    if (Buffer.byteLength(raw, "utf8") > 1_200_000) return fail("حجم الطلب أكبر من الحد المسموح.", 413);
     const body = JSON.parse(raw) as { task?: unknown; documents?: unknown };
     if (typeof body.task !== "string" || !body.task.trim()) return fail("اكتب المطلوب تنفيذه أولًا.", 400);
     task = body.task.trim();
     if (task.length > 6000) return fail("المهمة طويلة جدًا؛ الحد الأقصى 6000 حرف.", 413);
-    documents = Array.isArray(body.documents) ? body.documents.slice(0, 8).flatMap((item) => {
-      if (!item || typeof item !== "object") return [];
-      const doc = item as { name?: unknown; content?: unknown };
-      if (typeof doc.name !== "string" || typeof doc.content !== "string") return [];
-      return [{ name: doc.name.replace(/[\r\n\x00-\x1f]/g, " ").slice(0, 100), content: doc.content.slice(0, 5000) }];
-    }) : [];
+    if (body.documents !== undefined && !Array.isArray(body.documents)) return fail("صيغة الملفات المرفقة غير صالحة.", 400);
+    const incomingDocs = Array.isArray(body.documents) ? body.documents : [];
+    if (incomingDocs.length > 8) return fail("الحد الأقصى 8 ملفات في المهمة الواحدة.", 413);
+    if (incomingDocs.some((item) => !item || typeof item !== "object" || Array.isArray(item) ||
+      typeof (item as { name?: unknown }).name !== "string" ||
+      typeof (item as { content?: unknown }).content !== "string" ||
+      (item as { name: string }).name.length > 200 ||
+      (item as { content: string }).content.length > 5000)) {
+      return fail("أحد الملفات المرفقة غير صالح أو يتجاوز 5000 حرف.", 400);
+    }
+    documents = incomingDocs.map((item) => {
+      const doc = item as { name: string; content: string };
+      return { name: doc.name.replace(/[\\r\\n\\x00-\\x1f]/g, " ").slice(0, 100), content: doc.content };
+    });
+    if (documents.reduce((sum, doc) => sum + doc.content.length, 0) > 32_000) {
+      return fail("إجمالي محتوى الملفات يتجاوز 32 ألف حرف للمهمة الواحدة.", 413);
+    }
   } catch { return fail("تعذر قراءة الطلب.", 400); }
 
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
