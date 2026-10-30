@@ -1,10 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit } from "../../../_lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const rateError = enforceRateLimit(request, "google-oauth-start", 6);
+  if (rateError) return rateError;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = process.env.MEAI_GOOGLE_REDIRECT_URI;
@@ -15,7 +18,7 @@ export async function GET(request: NextRequest) {
   }
   let callback: URL;
   try { callback = new URL(redirectUri); } catch { return NextResponse.json({ error: "عنوان إعادة توجيه Google غير صالح." }, { status: 500 }); }
-  if (callback.pathname !== "/api/integrations/google/callback" || !["https:", "http:"].includes(callback.protocol)) {
+  if (callback.pathname !== "/api/integrations/google/callback" || callback.username || callback.password || callback.search || callback.hash || (callback.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && callback.protocol === "http:" && ["localhost", "127.0.0.1"].includes(callback.hostname)))) {
     return NextResponse.json({ error: "MEAI_GOOGLE_REDIRECT_URI يجب أن يشير إلى مسار callback الخاص بالتطبيق." }, { status: 500 });
   }
 
