@@ -1003,10 +1003,29 @@ elif page == "الوكيل":
                         for item in results:
                             if item.get("action", "").endswith("run_code"):
                                 log.append("مخرجات التنفيذ الفعلية: " + item.get("message", ""))
+                    captured_runs = []
+                    if agent_mode != "خطة فقط":
+                        for result in results:
+                            if result.get("action", "").endswith("run_code"):
+                                item = {
+                                    "status": result.get("status", "غير معروف"),
+                                    "raw": result.get("message", ""),
+                                    "output": "",
+                                    "has_error": result.get("status") != "تم",
+                                }
+                                try:
+                                    decoded = json.loads(item["raw"])
+                                    if isinstance(decoded, dict):
+                                        item["output"] = str(decoded.get("output", ""))
+                                        item["has_error"] = bool(decoded.get("has_error", item["has_error"]))
+                                except Exception:
+                                    item["output"] = item["raw"]
+                                captured_runs.append(item)
                     st.session_state.agent_runs.insert(0, {
                         "goal":agent_goal.strip(),"summary":str(payload.get("summary","")),
                         "actions":actions if agent_mode != "خطة فقط" else [],
                         "checks":payload.get("checks",[]),"log":log,
+                        "execution_results": captured_runs,
                         "time":datetime.now().isoformat(timespec="minutes")
                     })
                     st.success("انتهت دورة الوكيل. راجع سجل الأدوات والنتائج الفعلية والملفات الناتجة.")
@@ -1023,6 +1042,13 @@ elif page == "الوكيل":
                     st.write("• "+str(item))
             for item in run.get("log",[]):
                 st.info(item)
+            for execution_idx, result in enumerate(run.get("execution_results", []), start=1):
+                st.markdown(f"**نتيجة تشغيل Python الفعلية #{execution_idx}**")
+                if result.get("has_error") or result.get("status") != "تم":
+                    st.error("حالة التشغيل: فشل")
+                else:
+                    st.success("حالة أداة التشغيل: اكتملت دون خطأ مُبلغ عنه")
+                st.code(result.get("output") or result.get("raw") or "لم ترجع الأداة مخرجات.", language="text")
             for action in run.get("actions",[]):
                 if action.get("type") == "write_file":
                     st.caption("ملف: "+str(action.get("path","")))
