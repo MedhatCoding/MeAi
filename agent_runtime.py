@@ -111,7 +111,8 @@ def execute_agent_actions(
             else:
                 raise ValueError("نوع الأداة غير مسموح.")
             rendered = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, default=str)
-            results.append({"action": label, "status": "تم", "message": rendered[:MAX_TOOL_OUTPUT]})
+            status = "فشل" if kind == "run_code" and isinstance(output, dict) and output.get("has_error") else "تم"
+            results.append({"action": label, "status": status, "message": rendered[:MAX_TOOL_OUTPUT]})
         except Exception as exc:
             results.append({"action": label, "status": "فشل", "message": f"{type(exc).__name__}: {str(exc)[:500]}"})
     return results
