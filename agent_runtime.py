@@ -48,10 +48,10 @@ def run_code_in_sandbox(code: str, *, api_key: str, language: str = "python"):
         if not output and logs is not None:
             stdout = getattr(logs, "stdout", None) or []
             stderr = getattr(logs, "stderr", None) or []
-            output = "\\n".join(str(item) for item in [*stdout, *stderr])
+            output = "\n".join(str(item) for item in [*stdout, *stderr])
         error = getattr(execution, "error", None)
         if error:
-            output = (output + "\\n" if output else "") + str(error)
+            output = (output + "\n" if output else "") + str(error)
         return {
             "language": language,
             "output": (output or "اكتمل التنفيذ دون مخرجات نصية.")[:MAX_TOOL_OUTPUT],
