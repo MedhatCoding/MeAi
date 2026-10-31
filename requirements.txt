@@ -6,3 +6,4 @@ python-docx>=1.1
 pandas>=2.2
 openpyxl>=3.1
 huggingface_hub>=0.30
+e2b-code-interpreter>=1.5,<2
