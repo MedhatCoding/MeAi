@@ -36,7 +36,15 @@ def run_code_in_sandbox(code: str, *, api_key: str, language: str = "python"):
     except ImportError as exc:
         raise RuntimeError("حزمة e2b-code-interpreter غير مثبتة؛ أعد نشر التطبيق بعد تحديث المتطلبات.") from exc
 
-    with Sandbox.create(api_key=api_key) as sandbox:
+    # Older e2b-code-interpreter releases expose Sandbox() rather than
+    # Sandbox.create(). Support both SDK entry points.
+    sandbox = None
+    try:
+        if callable(getattr(Sandbox, "create", None)):
+            sandbox = Sandbox.create(api_key=api_key)
+        else:
+            sandbox = Sandbox(api_key=api_key)
+
         execution = sandbox.run_code(
             code,
             language="python",
@@ -45,10 +53,12 @@ def run_code_in_sandbox(code: str, *, api_key: str, language: str = "python"):
         )
         output = getattr(execution, "text", "") or ""
         logs = getattr(execution, "logs", None)
-        if not output and logs is not None:
+        if logs is not None:
             stdout = getattr(logs, "stdout", None) or []
             stderr = getattr(logs, "stderr", None) or []
-            output = "\n".join(str(item) for item in [*stdout, *stderr])
+            log_output = "\n".join(str(item) for item in [*stdout, *stderr])
+            if log_output:
+                output = (output + "\n" if output else "") + log_output
         error = getattr(execution, "error", None)
         if error:
             output = (output + "\n" if output else "") + str(error)
@@ -59,6 +69,11 @@ def run_code_in_sandbox(code: str, *, api_key: str, language: str = "python"):
             "sandbox": "E2B ephemeral sandbox",
             "timeout_seconds": CODE_TIMEOUT_SECONDS,
         }
+    finally:
+        if sandbox is not None:
+            close = getattr(sandbox, "kill", None) or getattr(sandbox, "close", None)
+            if callable(close):
+                close()
 
 
 def execute_agent_actions(
