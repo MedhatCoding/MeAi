@@ -900,27 +900,33 @@ elif page == "الوكيل":
             st.warning("لم يتم العثور على ملفات نصية مسموحة لتهيئة مساحة العمل.")
     except Exception as workspace_exc:
         st.warning(f"تعذر تهيئة ملفات المشروع: {type(workspace_exc).__name__}: {workspace_exc}")
-    st.write("نفّذ مهام محددة داخل مساحة العمل باستخدام أدوات محدودة، مع سجل واضح لما حدث.")
-    st.warning("الوكيل لا يشغّل أوامر النظام ولا ينشر أو يرسل أو يشتري شيئًا. كتابة الملفات محصورة داخل مساحة العمل المؤقتة، والتحقق ثابت دون تشغيل الكود.")
+    st.write("الوكيل يشغّل كود Python تلقائيًا داخل بيئة E2B سحابية مؤقتة، ويعرض المخرجات والأخطاء.")
+    st.info("تشغيل الكود لا يحتاج موافقة لكل مرة. إنشاء ملفات مساحة العمل يظل اختياريًا وبموافقتك، ولا تُعدّل ملفات GitHub تلقائيًا.")
+    try:
+        e2b_api_key = str(st.secrets.get("E2B_API_KEY", os.getenv("E2B_API_KEY", ""))).strip()
+    except Exception:
+        e2b_api_key = os.getenv("E2B_API_KEY", "").strip()
+    if e2b_api_key:
+        st.success("مفتاح E2B موجود في إعدادات Streamlit.")
+    else:
+        st.warning("أضف E2B_API_KEY إلى Streamlit Secrets لتفعيل تشغيل الكود.")
     if "agent_runs" not in st.session_state:
         st.session_state.agent_runs = []
     with st.form("agent_execute_form"):
         agent_goal = st.text_area("المهمة المطلوب تنفيذها", placeholder="مثال: أنشئ أداة Python تنظف ملف CSV وتتحقق من الأعمدة، مع اختبارات وREADME.", height=120)
-        agent_mode = st.selectbox("نطاق التنفيذ", ["خطة فقط", "إنشاء ملفات داخل مساحة العمل"])
-        agent_confirm = st.checkbox("أوافق على تنفيذ الخطوات داخل مساحة العمل المؤقتة فقط", value=False, disabled=(agent_mode == "خطة فقط"))
+        agent_mode = st.selectbox("نطاق التنفيذ", ["خطة فقط", "تنفيذ وتشغيل الكود تلقائيًا"])
+        agent_confirm = st.checkbox("أسمح أيضًا بإنشاء ملفات داخل مساحة العمل المؤقتة (اختياري)", value=False, disabled=(agent_mode == "خطة فقط"))
         run_agent = st.form_submit_button("تشغيل الوكيل", type="primary", use_container_width=True)
     if run_agent:
         if not agent_goal.strip():
             st.warning("اكتب المهمة أولًا.")
-        elif agent_mode != "خطة فقط" and not agent_confirm:
-            st.warning("أكد السماح بإنشاء الملفات داخل مساحة العمل.")
         else:
-            with st.spinner("الوكيل يحلل المهمة ويجهز خطوات التنفيذ..."):
+            with st.spinner("الوكيل ينفذ المهمة ويشغّل الكود في بيئة معزولة..."):
                 try:
-                    tool_policy = """أنت وكيل تنفيذي داخل تطبيق شخصي يستخدم أدوات محدودة. أخرج JSON صالحًا فقط:
-{"summary":"ملخص المهمة","actions":[{"type":"search_web","query":"..."}],"checks":["معيار تحقق"]}
-الأدوات المسموحة: search_web(query)، list_files، read_file(path)، validate_file(path)، write_file(path,content).
-ضع من 1 إلى 6 إجراءات مرتبة. استخدم البحث لجمع معلومات حديثة عند الحاجة، ثم اقرأ الملفات ذات الصلة قبل تعديلها. لا تكتب ملفات إلا إذا طلبت المهمة ملفات وكان الوضع تنفيذًا. لا أوامر نظام أو تشغيل كود أو نشر أو إرسال أو شراء أو أسرار. المسارات نسبية فقط والامتدادات المسموحة يفرضها النظام. لا تدّع تنفيذ إجراء لم يُنفّذ. في وضع التخطيط فقط اقترح الإجراءات ولا تنفذها."""
+                    tool_policy = """أنت وكيل تنفيذي. أخرج JSON صالحًا فقط:
+{"summary":"ملخص المهمة","actions":[{"type":"run_code","language":"python","code":"print(1+1)"}],"checks":["معيار تحقق"]}
+الأدوات: search_web(query)، list_files، read_file(path)، validate_file(path)، run_code(language,code)، write_file(path,content).
+في وضع التنفيذ شغّل كود Python المطلوب واختبره تلقائيًا عبر run_code دون طلب موافقة منفصلة. التشغيل يتم في E2B Sandbox مؤقتة وليس على خادم التطبيق. لا تضع أسرارًا أو مفاتيح داخل الكود. إنشاء الملفات مسموح فقط إذا كان خيار المستخدم مفعّلًا؛ وإلا لا تستخدم write_file. لا تنفذ إجراءات خارجية أو نشرًا أو إرسالًا أو شراءً. ضع من 1 إلى 6 إجراءات ولا تدّع تنفيذ شيء لم يحدث. في وضع التخطيط فقط لا تنفذ الأدوات."""
                     response = call_model([
                         {"role":"system","content":tool_policy},
                         {"role":"user","content":"المهمة: "+agent_goal.strip()+"\nوضع التنفيذ: "+agent_mode+"\nأخرج JSON فقط."}
@@ -957,6 +963,7 @@ elif page == "الوكيل":
                             actions,
                             search_fn=search_web,
                             allow_writes=bool(agent_confirm),
+                            e2b_api_key=e2b_api_key,
                             max_actions=6,
                         )
                         for item in results:
@@ -964,7 +971,7 @@ elif page == "الوكيل":
                         # Give actual tool results back to the model for a grounded completion report.
                         try:
                             report = call_model([
-                                {"role":"system","content":"اكتب تقرير إنجاز عربيًا موجزًا ودقيقًا اعتمادًا فقط على النتائج الفعلية. ميّز بين النجاح والفشل وما لم يُنفذ، ولا تدّع تشغيل الكود."},
+                                {"role":"system","content":"اكتب تقرير إنجاز عربيًا موجزًا ودقيقًا اعتمادًا فقط على النتائج الفعلية. ميّز بين النجاح والفشل وما لم يُنفذ، ولا تدّع نجاح اختبار لم يظهر في النتائج."},
                                 {"role":"user","content":json.dumps({"goal":agent_goal,"tool_results":results},ensure_ascii=False)[:12000]}
                             ])
                             payload["summary"] = report.strip()[:3000] or payload.get("summary","")
