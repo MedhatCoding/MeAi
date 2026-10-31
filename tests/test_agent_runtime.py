@@ -27,7 +27,36 @@ class AgentRuntimeTests(unittest.TestCase):
             allow_writes=False,
         )
         self.assertEqual(results[0]["status"], "فشل")
-        self.assertIn("الكتابة غير مفعّلة", results[0]["message"])
+        self.assertIn("إنشاء الملفات غير مصرح به", results[0]["message"])
+
+    @patch("agent_runtime.run_code_in_sandbox")
+    def test_code_execution_runs_without_file_write_permission(self, run_code):
+        run_code.return_value = {
+            "language": "python",
+            "output": "2",
+            "has_error": False,
+        }
+        results = execute_agent_actions(
+            [{"type": "run_code", "language": "python", "code": "print(1 + 1)"}],
+            search_fn=lambda q: "",
+            e2b_api_key="test-key",
+            allow_writes=False,
+        )
+        self.assertEqual(results[0]["status"], "تم")
+        self.assertIn('"output": "2"', results[0]["message"])
+        run_code.assert_called_once_with(
+            "print(1 + 1)", api_key="test-key", language="python"
+        )
+
+    def test_code_execution_requires_e2b_key(self):
+        from agent_runtime import run_code_in_sandbox
+        with self.assertRaisesRegex(RuntimeError, "E2B_API_KEY"):
+            run_code_in_sandbox("print(1)", api_key="")
+
+    def test_code_execution_rejects_unsupported_language(self):
+        from agent_runtime import run_code_in_sandbox
+        with self.assertRaisesRegex(ValueError, "Python فقط"):
+            run_code_in_sandbox("console.log(1)", api_key="test-key", language="javascript")
 
     def test_action_count_is_bounded(self):
         with self.assertRaises(ValueError):
