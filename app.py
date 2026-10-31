@@ -914,7 +914,7 @@ elif page == "الوكيل":
         st.session_state.agent_runs = []
     with st.form("agent_execute_form"):
         agent_goal = st.text_area("المهمة المطلوب تنفيذها", placeholder="مثال: أنشئ أداة Python تنظف ملف CSV وتتحقق من الأعمدة، مع اختبارات وREADME.", height=120)
-        agent_mode = st.selectbox("نطاق التنفيذ", ["خطة فقط", "تنفيذ وتشغيل الكود تلقائيًا"])
+        agent_mode = st.selectbox("نطاق التنفيذ", ["تنفيذ وتشغيل الكود تلقائيًا", "خطة فقط"], index=0)
         agent_confirm = st.checkbox("أسمح أيضًا بإنشاء ملفات داخل مساحة العمل المؤقتة (اختياري)", value=False, disabled=(agent_mode == "خطة فقط"))
         run_agent = st.form_submit_button("تشغيل الوكيل", type="primary", use_container_width=True)
     if run_agent:
@@ -955,6 +955,27 @@ elif page == "الوكيل":
                         if not isinstance(payload["checks"], list):
                             payload["checks"] = []
                         payload["checks"].append(note)
+
+                    # Execution mode must contain a real sandbox action. If the model
+                    # returns only a narrative/plan, request an executable Python action.
+                    if agent_mode != "خطة فقط" and not any(
+                        isinstance(item, dict) and item.get("type") == "run_code"
+                        for item in actions
+                    ):
+                        code_response = call_model([
+                            {"role": "system", "content": 'حوّل طلب المستخدم إلى كود Python قابل للتنفيذ. أخرج JSON فقط بهذا الشكل: {"summary":"...","actions":[{"type":"run_code","language":"python","code":"..."}],"checks":["..."]}. يجب أن يحتوي actions على إجراء run_code واحد على الأقل. لا تدّع التنفيذ؛ المطلوب كتابة الكود فقط ليشغله التطبيق.'},
+                            {"role": "user", "content": agent_goal.strip()},
+                        ])
+                        code_payload = parse_agent_json_response(code_response)
+                        code_actions = code_payload.get("actions", []) if isinstance(code_payload, dict) else []
+                        if not isinstance(code_actions, list) or not any(
+                            isinstance(item, dict) and item.get("type") == "run_code"
+                            for item in code_actions
+                        ):
+                            raise ValueError("لم يُنشئ النموذج إجراء تشغيل Python؛ لم يتم الادعاء بتنفيذ المهمة.")
+                        actions = (actions + code_actions)[:6]
+                        payload["actions"] = actions
+
                     log = []
                     if agent_mode == "خطة فقط":
                         log.append("وضع التخطيط فقط: لم تُنفذ أي أداة أو تُكتب ملفات.")
@@ -968,15 +989,20 @@ elif page == "الوكيل":
                         )
                         for item in results:
                             log.append(f"{item['action']}: {item['status']} — {item['message']}")
-                        # Give actual tool results back to the model for a grounded completion report.
-                        try:
-                            report = call_model([
-                                {"role":"system","content":"اكتب تقرير إنجاز عربيًا موجزًا ودقيقًا اعتمادًا فقط على النتائج الفعلية. ميّز بين النجاح والفشل وما لم يُنفذ، ولا تدّع نجاح اختبار لم يظهر في النتائج."},
-                                {"role":"user","content":json.dumps({"goal":agent_goal,"tool_results":results},ensure_ascii=False)[:12000]}
-                            ])
-                            payload["summary"] = report.strip()[:3000] or payload.get("summary","")
-                        except Exception:
-                            pass
+                        # Build the status from tool results, never from a model's claim.
+                        code_results = [
+                            item for item in results
+                            if item.get("action", "").endswith("run_code")
+                        ]
+                        if code_results and all(item.get("status") == "تم" for item in code_results):
+                            payload["summary"] = "اكتمل تشغيل الكود داخل E2B. راجع المخرجات الفعلية أدناه."
+                        elif code_results:
+                            payload["summary"] = "فشل تشغيل الكود أو لم يكتمل. راجع رسالة الخطأ الفعلية أدناه."
+                        else:
+                            payload["summary"] = "لم يتم تشغيل أي كود؛ لا يمكن اعتبار المهمة منفذة."
+                        for item in results:
+                            if item.get("action", "").endswith("run_code"):
+                                log.append("مخرجات التنفيذ الفعلية: " + item.get("message", ""))
                     st.session_state.agent_runs.insert(0, {
                         "goal":agent_goal.strip(),"summary":str(payload.get("summary","")),
                         "actions":actions if agent_mode != "خطة فقط" else [],
