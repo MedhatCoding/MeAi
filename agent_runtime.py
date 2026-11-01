@@ -40,10 +40,24 @@ def run_code_in_sandbox(code: str, *, api_key: str, language: str = "python"):
     # Sandbox.create(). Support both SDK entry points.
     sandbox = None
     try:
+        # run_code talks to E2B's sandbox service endpoints. Some SDK/API
+        # combinations create a secured sandbox whose traffic token is not
+        # propagated by the code-interpreter client, causing a 403 before
+        # user code starts. These sandboxes are ephemeral and run only
+        # bounded Python, so explicitly allow public traffic for SDK-managed
+        # service calls; never log or expose sandbox credentials.
         if callable(getattr(Sandbox, "create", None)):
-            sandbox = Sandbox.create(api_key=api_key)
+            sandbox = Sandbox.create(
+                api_key=api_key,
+                network={"allow_public_traffic": True},
+            )
         else:
-            sandbox = Sandbox(api_key=api_key)
+            # Older SDKs do not expose the network option on the constructor.
+            # Upgrade is preferable to silently retrying a secured sandbox.
+            raise RuntimeError(
+                "إصدار E2B المثبت لا يدعم إعداد الوصول المطلوب. "
+                "حدّث e2b-code-interpreter ثم أعد النشر."
+            )
 
         execution = sandbox.run_code(
             code,
