@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { Sandbox } from "@e2b/code-interpreter";
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
+import { enforceApiAccess } from "../../_lib/api-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,8 @@ function fail(message: string, status: number) {
 export async function POST(request: NextRequest) {
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
+  const accessError = await enforceApiAccess(request);
+  if (accessError) return accessError;
   const rateError = enforceRateLimit(request, "agent-code-run", 5);
   if (rateError) return rateError;
   if (!process.env.E2B_API_KEY) return fail("بيئة تشغيل الكود غير مهيأة. أضف E2B_API_KEY إلى أسرار الاستضافة.", 503);
