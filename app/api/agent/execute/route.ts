@@ -1,4 +1,5 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
+import { enforceApiAccess } from "../../_lib/api-access";
 import { planAgentTools } from "../../_lib/agent-planner";
 import { NextRequest } from "next/server";
 
@@ -14,6 +15,8 @@ export async function POST(request: NextRequest) {
   if (length > 1_200_000) return fail("حجم الطلب أكبر من الحد المسموح.", 413);
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
+  const accessError = await enforceApiAccess(request);
+  if (accessError) return accessError;
   const rateError = enforceRateLimit(request, "agent-execute", 10);
   if (rateError) return rateError;
 
