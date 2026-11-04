@@ -1,4 +1,5 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
+import { enforceApiAccess } from "../../_lib/api-access";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -13,6 +14,8 @@ export async function POST(request: NextRequest) {
   if (contentLength > 24_000) return error("حجم الطلب أكبر من الحد المسموح.", 413);
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
+  const accessError = await enforceApiAccess(request);
+  if (accessError) return accessError;
   const rateError = enforceRateLimit(request, "agent-plan", 12);
   if (rateError) return rateError;
   let task = "";
