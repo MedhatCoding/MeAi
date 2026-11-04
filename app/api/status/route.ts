@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { rejectCrossOrigin } from "../_lib/guard";
+import { apiAuthRequired } from "../_lib/api-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
       githubSourceEditing: Boolean(githubConfigured && process.env.MEAI_AGENT_EDIT_ENABLED === "true"),
       googleOAuthConfigured,
       supabaseConfigured,
+      apiAuthRequired: apiAuthRequired(),
     },
     readiness: {
       chat: provider ? "configured_not_live_tested" : "missing_provider",
