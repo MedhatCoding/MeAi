@@ -8,6 +8,12 @@ on:
       - "requirements.txt"
       - ".streamlit/**"
       - ".github/workflows/diagnose.yml"
+  pull_request:
+    paths:
+      - "app.py"
+      - "requirements.txt"
+      - ".streamlit/**"
+      - ".github/workflows/diagnose.yml"
   workflow_dispatch:
 
 permissions:
