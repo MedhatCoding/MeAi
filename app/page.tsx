@@ -246,11 +246,7 @@ ${data.error.name}: ${data.error.value}` : ""));
     if (!task || artifactBusy) return;
     setArtifactBusy(true); setNotice("");
     try {
-      const requestTask = agentPlan ? task + "
-
-خطة المهمة:
-" + agentPlan.steps.join("
-") : task;
+      const requestTask = agentPlan ? task + "\n\nخطة المهمة:\n" + agentPlan.steps.join("\n") : task;
       const response = await fetch("/api/agent/artifact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({task:requestTask,format:"markdown",documents:documents.map(d=>({name:d.name,content:d.content.slice(0,7000)}))}) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر إنشاء الملف.");
@@ -302,13 +298,10 @@ ${data.error.name}: ${data.error.value}` : ""));
         const { value: chunk, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(chunk, {stream:true});
-        const events = buffer.split("
-
-");
+        const events = buffer.split("\n\n");
         buffer = events.pop() ?? "";
         for (const event of events) {
-          for (const line of event.split("
-")) {
+          for (const line of event.split("\n")) {
             if (!line.startsWith("data:")) continue;
             const data = line.slice(5).trim();
             if (!data || data === "[DONE]") { if (data === "[DONE]") finished = true; continue; }
@@ -395,9 +388,7 @@ ${doc.content.slice(0,12000)}
         {section==="research"&&<div className="section-page"><div className="page-heading"><div className="page-icon blue"><Search size={22}/></div><div><div className="eyebrow">بحث عام عبر الويب</div><h1>ابحث في أي موضوع</h1><p>اعثر على صفحات ومراجع أولية، وافتح المصدر لمراجعة التفاصيل بنفسك.</p></div></div><form className="research-search" onSubmit={e=>{e.preventDefault();void runResearch();}}><input value={researchQuery} onChange={e=>setResearchQuery(e.target.value)} maxLength={300} minLength={2} placeholder="اكتب موضوع البحث أو سؤالًا..." aria-label="عبارة البحث"/><button className="primary-btn" type="submit" disabled={researchBusy||researchQuery.trim().length<2}>{researchBusy?<Activity size={16} className="spin"/>:<Search size={16}/>} {researchBusy?"جاري البحث":"ابحث"}</button></form><div className="research-note"><ShieldCheck size={16}/><span>النتائج مختصرات من محرك البحث وليست تحققًا مستقلًا. راجع المصدر وتاريخ النشر قبل الاعتماد عليها.</span></div>{researchData.length>0&&<div className="research-actions"><span className="pill">{researchData.length} نتائج</span><button className="primary-btn" type="button" disabled={busy} onClick={()=>{const evidence=researchData.map((r,i)=>`${i+1}. ${r.title}
 ${r.date?`التاريخ: ${r.date}
 `:""}${r.snippet}
-المصدر: ${r.url}`).join("
-
-");setSection("chat");void sendMessage(`حلّل نتائج البحث التالية للإجابة عن سؤالي: ${researchQuery}
+المصدر: ${r.url}`).join("\n\n");setSection("chat");void sendMessage(`حلّل نتائج البحث التالية للإجابة عن سؤالي: ${researchQuery}
 
 اكتب خلاصة واضحة، أهم النقاط، ما يتفق وما يختلف بين المصادر، وما لا يمكن الجزم به. اربط كل معلومة بمصدرها ورابطها، وميّز بين تاريخ النشر وتاريخ الحدث. لا تضف حقائق غير مدعومة بالمقتطفات، واذكر أن التحليل أولي لأن المحتوى الكامل للصفحات لم يُقرأ.
 
