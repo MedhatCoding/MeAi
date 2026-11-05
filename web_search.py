@@ -199,7 +199,7 @@ def search_web(query):
                 extracted_domains.add(urlparse(item["url"]).netloc.lower().removeprefix("www."))
             else:
                 item["page_extracted"] = False
-        return "SEARCH_STATUS=OK\\nSEARCH_JSON=" + json.dumps(
+        return "SEARCH_STATUS=OK\nSEARCH_JSON=" + json.dumps(
             {
                 "query": query, "news_intent": news_intent, "results": unique[:15],
                 "pages_read": sum(1 for x in unique[:3] if x.get("page_extracted")),
@@ -210,7 +210,7 @@ def search_web(query):
         reason = "لم أجد أخبارًا حديثة ذات صلة واضحة وتاريخ نشر ورابط مقال محدد؛ لم أعرض نتائج غير متحققة."
     else:
         reason = "لم أجد صفحات ذات صلة كافية بالسؤال. جرّب صياغة أكثر تحديدًا."
-    return "SEARCH_STATUS=FAILED\\n" + reason + " " + " | ".join(errors[:3])
+    return "SEARCH_STATUS=FAILED\n" + reason + " " + " | ".join(errors[:3])
 
 
 def format_search_results(search_context):
@@ -279,10 +279,10 @@ def format_search_results(search_context):
         else:
             summary_line = f"- **المقتطف:** {snippet if snippet else 'تعذر استخراج نص المقال؛ لا يمكن تأكيد تفاصيله من صفحة المصدر.'}"
         output.append(
-            f"### {len(output)+1}. {item['title']}\\n"
-            f"- **المصدر:** {item.get('source') or host}\\n"
-            f"- **تاريخ النشر:** {date_label}\\n"
-            f"- **الرابط:** [{host}]({item['url']})\\n"
+            f"### {len(output)+1}. {item['title']}\n"
+            f"- **المصدر:** {item.get('source') or host}\n"
+            f"- **تاريخ النشر:** {date_label}\n"
+            f"- **الرابط:** [{host}]({item['url']})\n"
             f"{summary_line}"
         )
         if len(output) >= 5:
@@ -293,12 +293,12 @@ def format_search_results(search_context):
         return "لم أجد نتائج قابلة للعرض."
     note = ""
     if recent and dated_count < 5:
-        note = "\\n\\n**تنبيه:** عُرضت الأخبار التي أمكن التحقق من تاريخها فقط؛ قد يكون عدد النتائج أقل من خمسة."
+        note = "\n\n**تنبيه:** عُرضت الأخبار التي أمكن التحقق من تاريخها فقط؛ قد يكون عدد النتائج أقل من خمسة."
     try:
         payload = json.loads(search_context.split("SEARCH_JSON=", 1)[1])
         read_count = int(payload.get("pages_read", 0))
         domain_count = int(payload.get("independent_domains_read", 0))
-        note += f"\\n\\n**حالة التحقق:** تمت قراءة {read_count} صفحة من النتائج الأولى عبر {domain_count} نطاق مستقل. قراءة الصفحة لا تعني صحة المعلومة؛ لذلك لا نصف النتيجة بأنها مؤكدة دون أدلة مستقلة."
+        note += f"\n\n**حالة التحقق:** تمت قراءة {read_count} صفحة من النتائج الأولى عبر {domain_count} نطاق مستقل. قراءة الصفحة لا تعني صحة المعلومة؛ لذلك لا نصف النتيجة بأنها مؤكدة دون أدلة مستقلة."
         # General cross-source comparison: compare recurring meaningful terms only
         # across extracted pages from different domains; this is a signal, not fact-checking.
         from collections import defaultdict
@@ -316,7 +316,7 @@ def format_search_results(search_context):
             parts = host.split(".")
             domain = ".".join(parts[-2:]) if len(parts) >= 2 else host
             terms = {
-                w.lower() for w in re.findall(r"[\\w\\u0600-\\u06ff]+", body)
+                w.lower() for w in re.findall(r"[\w\u0600-\u06ff]+", body)
                 if len(w) > 3 and w.lower() not in stopwords
             }
             if domain and terms:
@@ -332,11 +332,11 @@ def format_search_results(search_context):
             )[:8]
             if recurring:
                 terms_label = "، ".join(term for term, _ in recurring)
-                note += f"\\n\\n**مقارنة أولية بين المصادر:** ظهرت كلمات/موضوعات مشتركة عبر نطاقات مختلفة: {terms_label}. هذا تشابه موضوعي فقط وليس إثباتًا لصحة الادعاءات؛ راجع النصوص والروابط، وأي أرقام أو تواريخ متعارضة تحتاج تحققًا مستقلًا."
+                note += f"\n\n**مقارنة أولية بين المصادر:** ظهرت كلمات/موضوعات مشتركة عبر نطاقات مختلفة: {terms_label}. هذا تشابه موضوعي فقط وليس إثباتًا لصحة الادعاءات؛ راجع النصوص والروابط، وأي أرقام أو تواريخ متعارضة تحتاج تحققًا مستقلًا."
             else:
-                note += "\\n\\n**مقارنة المصادر:** لم يظهر تداخل نصي كافٍ بين صفحات مستقلة؛ لا يمكن استنتاج اتفاق المصادر من النتائج الحالية."
+                note += "\n\n**مقارنة المصادر:** لم يظهر تداخل نصي كافٍ بين صفحات مستقلة؛ لا يمكن استنتاج اتفاق المصادر من النتائج الحالية."
         else:
-            note += "\\n\\n**مقارنة المصادر:** يلزم وجود صفحتين مقروءتين على الأقل من نطاقين مستقلين؛ لا تُعدّ إعادة نشر الخبر من النطاق نفسه مصدرًا مستقلًا."
+            note += "\n\n**مقارنة المصادر:** يلزم وجود صفحتين مقروءتين على الأقل من نطاقين مستقلين؛ لا تُعدّ إعادة نشر الخبر من النطاق نفسه مصدرًا مستقلًا."
     except Exception:
         pass
-    return "## نتائج البحث\\n\\n" + "\\n\\n".join(output) + note
+    return "## نتائج البحث\n\n" + "\n\n".join(output) + note

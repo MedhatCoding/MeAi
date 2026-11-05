@@ -9,6 +9,9 @@ for _key in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_KEY"):
 
 import memory_store
 
+# Bind the test DB explicitly; app_settings may already be imported by an earlier test.
+memory_store.DB = os.path.join(_TMP_DIR, "memory.db")
+
 
 class MemoryStoreTests(unittest.TestCase):
     def setUp(self):

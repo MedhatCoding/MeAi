@@ -32,8 +32,8 @@ def render():
         st.session_state.chat = []
     # Export the current conversation as a downloadable UTF-8 Markdown transcript.
     if st.session_state.get("chat"):
-        transcript = "\\n\\n".join(
-            ("## المستخدم\\n" if m["role"] == "user" else "## Medhat AI\\n") + m["content"]
+        transcript = "\n\n".join(
+            ("## المستخدم\n" if m["role"] == "user" else "## Medhat AI\n") + m["content"]
             for m in st.session_state.chat
         )
         st.download_button(
@@ -82,7 +82,7 @@ def render():
 نتائج البحث:
 {search_context or 'لم يجر البحث'}"""
         if coding_request:
-            system += "\\nطلب برمجي: أعطِ أولوية للحل التنفيذي، والكود المتكامل، والتكاملات الفعلية. لا تكتفِ بنصائح عامة، ولا تدّع تشغيل الكود ما لم يحدث ذلك."
+            system += "\nطلب برمجي: أعطِ أولوية للحل التنفيذي، والكود المتكامل، والتكاملات الفعلية. لا تكتفِ بنصائح عامة، ولا تدّع تشغيل الكود ما لم يحدث ذلك."
 
         history = [{"role":"system","content":system}] + st.session_state.chat[-12:]
         with st.chat_message("assistant"):
@@ -98,7 +98,7 @@ def render():
                         except Exception as exc:
                             answer = f"تعذر حفظ المعلومة في الذاكرة: {type(exc).__name__}: {str(exc)[:180]}"
                 elif wants_search and search_context.startswith("SEARCH_STATUS=FAILED"):
-                    answer = "لم أتمكن من الوصول إلى نتائج بحث مباشرة الآن، لذلك لن أخترع أخبارًا أو روابط.\n\n**تفاصيل فنية:** " + search_context.replace("SEARCH_STATUS=FAILED\\n", "")
+                    answer = "لم أتمكن من الوصول إلى نتائج بحث مباشرة الآن، لذلك لن أخترع أخبارًا أو روابط.\n\n**تفاصيل فنية:** " + search_context.replace("SEARCH_STATUS=FAILED\n", "")
                 elif wants_search and search_context.startswith("SEARCH_STATUS=OK"):
                     answer = format_search_results(search_context)
                 else:

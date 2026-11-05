@@ -15,8 +15,8 @@ def render():
         memory_rows = []
         st.error(f"تعذر تحميل عناصر الذاكرة: {type(exc).__name__}: {str(exc)[:160]}")
     if memory_rows:
-        memory_export = "\\n\\n".join(
-            f"## {row[1]}\\n\\n{row[2]}\\n\\nتاريخ الإضافة: {row[3]}"
+        memory_export = "\n\n".join(
+            f"## {row[1]}\n\n{row[2]}\n\nتاريخ الإضافة: {row[3]}"
             for row in memory_rows
         )
         st.download_button(

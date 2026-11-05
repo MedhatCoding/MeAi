@@ -52,7 +52,7 @@ class FetchPageTextTests(unittest.TestCase):
 class FormatSearchResultsTests(unittest.TestCase):
     def test_formats_results_with_source_links(self):
         payload = {
-            "query": "أخبار التقنية",
+            "query": "شرح تقنية الذكاء الاصطناعي",
             "news_intent": False,
             "results": [
                 {
@@ -71,6 +71,8 @@ class FormatSearchResultsTests(unittest.TestCase):
         self.assertIn("## نتائج البحث", output)
         self.assertIn("https://example.com/news/tech", output)
         self.assertIn("خبر تقنية", output)
+        # regression: must be real newlines, never a literal backslash-n sequence
+        self.assertNotIn("\\n", output)
 
     def test_rejects_malformed_context(self):
         output = web_search.format_search_results("ليس سياق بحث صالحًا")
