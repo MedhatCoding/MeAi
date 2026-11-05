@@ -130,7 +130,7 @@ def execute_agent_actions(
                 )
             elif kind == "write_file":
                 if not allow_writes:
-                    raise PermissionError("إنشاء الملفات غير مصرح به؛ فعّل موافقة إنشاء ملفات مساحة العمل.")
+                    raise PermissionError("الكتابة غير مفعّلة: إنشاء الملفات غير مصرح به؛ فعّل موافقة إنشاء ملفات مساحة العمل.")
                 path = str(action.get("path", ""))
                 content = action.get("content", "")
                 if not isinstance(content, str):

@@ -11,6 +11,8 @@ function error(message: string, status: number) {
 function allowedPath(path: string) {
   if (!/^(app|components|lib)\/[A-Za-z0-9_./-]+\.(tsx?|jsx?|css|json|md)$/.test(path)) return false;
   if (path.split("/").some((part) => !part || part === "." || part === "..")) return false;
+  // Server code must never be agent-editable: no API routes, middleware, or config files.
+  if (/(^|\/)api(\.|\/|$)/i.test(path)) return false;
   if (/(^|\/)(\.env[^/]*|node_modules|\.next|\.github|\.git)(\/|$)/i.test(path)) return false;
   if (/(^|\/)(guard|auth|middleware|instrumentation|next\.config|postcss\.config|tailwind\.config|package-lock|pnpm-lock|yarn\.lock)(\.|\/|$)/i.test(path)) return false;
   if (/\.d\.ts$/.test(path)) return false;
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
     instruction = body.instruction.trim();
     path = body.path.trim();
     if (!instruction || instruction.length > 3000) return error("اكتب تعديلًا واضحًا لا يتجاوز 3000 حرف.", 400);
-    if (!allowedPath(path)) return error("هذا المسار غير مسموح بالتعديل الآلي. يُسمح بملفات التطبيق داخل app/ وcomponents/ وlib/ فقط، مع استثناء ملفات الأمان والإعدادات.", 400);
+    if (!allowedPath(path)) return error("هذا المسار غير مسموح بالتعديل الآلي. يُسمح بملفات واجهة التطبيق داخل app/ (باستثناء مسارات الخادم app/api) وcomponents/ وlib/ فقط، مع استثناء ملفات الأمان والإعدادات.", 400);
   } catch {
     return error("تعذر قراءة الطلب.", 400);
   }
@@ -100,7 +102,7 @@ export async function POST(request: NextRequest) {
     const updated = modelPayload.choices?.[0]?.message?.content;
     if (typeof updated !== "string" || !updated.trim()) return error("لم ينتج النموذج محتوى صالحًا؛ لم يتم تعديل الملف.", 502);
     let nextContent = updated.replace(/^\uFEFF/, "").trimEnd() + "\n";
-    nextContent = nextContent.replace(/^\`\`\`[a-zA-Z0-9_-]*\s*\n/, "").replace(/\n\`\`\`\s*$/, "\n");
+    nextContent = nextContent.replace(/^```[a-zA-Z0-9_-]*\s*\n/, "").replace(/\n```\s*$/, "\n");
     if (!nextContent.trim() || Buffer.byteLength(nextContent, "utf8") > 48_000) return error("الناتج فارغ أو يتجاوز الحد الآمن؛ لم يتم تعديل الملف.", 413);
     if (nextContent === original) return Response.json({ ok: true, changed: false, message: "لم ينتج تعديل مختلف عن الملف الحالي؛ لم يُنشأ commit.", path, branch }, { headers: { "Cache-Control": "no-store" } });
 

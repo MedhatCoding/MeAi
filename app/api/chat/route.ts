@@ -1,4 +1,5 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../_lib/guard";
+import { enforceApiAccess } from "../_lib/api-access";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -13,6 +14,8 @@ function jsonError(message: string, status: number) {
 export async function POST(request: NextRequest) {
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
+  const accessError = await enforceApiAccess(request);
+  if (accessError) return accessError;
   const rateError = enforceRateLimit(request, "chat", 20);
   if (rateError) return rateError;
   let messages: ChatMessage[];

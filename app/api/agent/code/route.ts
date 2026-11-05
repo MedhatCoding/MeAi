@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { Sandbox } from "@e2b/code-interpreter";
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
+import { enforceApiAccess } from "../../_lib/api-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,8 @@ function fail(message: string, status: number) {
 export async function POST(request: NextRequest) {
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
+  const accessError = await enforceApiAccess(request);
+  if (accessError) return accessError;
   const rateError = enforceRateLimit(request, "agent-code-run", 5);
   if (rateError) return rateError;
   if (!process.env.E2B_API_KEY) return fail("بيئة تشغيل الكود غير مهيأة. أضف E2B_API_KEY إلى أسرار الاستضافة.", 503);
@@ -33,9 +36,9 @@ export async function POST(request: NextRequest) {
     if (Buffer.byteLength(code, "utf8") > MAX_CODE_BYTES) return fail("الحد الأقصى للكود 20 كيلوبايت.", 413);
   } catch { return fail("صيغة طلب تشغيل الكود غير صالحة.", 400); }
 
-  let sandbox: Awaited<ReturnType<typeof Sandbox.create>> | null = null;
+  let sandbox: Sandbox | null = null;
   try {
-    sandbox = await Sandbox.create({ timeoutMs: 45_000, requestTimeoutMs: 15_000 });
+    sandbox = await Sandbox.create({ timeoutMs: 45_000, requestTimeoutMs: 15_000 }) as Sandbox;
     const execution = await sandbox.runCode(code, { language, timeoutMs: 12_000, requestTimeoutMs: 15_000 });
     const stdout = Array.isArray(execution.logs?.stdout) ? execution.logs.stdout.join("") : "";
     const stderr = Array.isArray(execution.logs?.stderr) ? execution.logs.stderr.join("") : "";

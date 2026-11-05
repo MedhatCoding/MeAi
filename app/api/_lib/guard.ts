@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 
 const buckets = new Map<string, { start: number; count: number }>();
+// Hard cap so a burst of spoofed IPs cannot grow server memory unbounded.
+const MAX_BUCKETS = 5000;
 
 export function rejectCrossOrigin(request: NextRequest): Response | null {
   const origin = request.headers.get("origin");
@@ -21,6 +23,12 @@ export function enforceRateLimit(request: NextRequest, namespace: string, max = 
   const key = namespace + ":" + ip;
   const now = Date.now();
   for (const [id, bucket] of buckets) if (now - bucket.start >= 60_000) buckets.delete(id);
+  if (buckets.size >= MAX_BUCKETS) {
+    // Shed the oldest half when the cap is reached so memory stays bounded
+    // without letting attackers evict every real user's bucket at once.
+    const ordered = [...buckets.entries()].sort((a, b) => a[1].start - b[1].start);
+    for (const [id] of ordered.slice(0, Math.ceil(MAX_BUCKETS / 2))) buckets.delete(id);
+  }
   const bucket = buckets.get(key);
   if (!bucket || now - bucket.start >= 60_000) {
     buckets.set(key, { start: now, count: 1 });
