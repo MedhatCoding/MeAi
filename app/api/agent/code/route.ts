@@ -36,9 +36,9 @@ export async function POST(request: NextRequest) {
     if (Buffer.byteLength(code, "utf8") > MAX_CODE_BYTES) return fail("الحد الأقصى للكود 20 كيلوبايت.", 413);
   } catch { return fail("صيغة طلب تشغيل الكود غير صالحة.", 400); }
 
-  let sandbox: Awaited<ReturnType<typeof Sandbox.create>> | null = null;
+  let sandbox: Sandbox | null = null;
   try {
-    sandbox = await Sandbox.create({ timeoutMs: 45_000, requestTimeoutMs: 15_000 });
+    sandbox = await Sandbox.create({ timeoutMs: 45_000, requestTimeoutMs: 15_000 }) as Sandbox;
     const execution = await sandbox.runCode(code, { language, timeoutMs: 12_000, requestTimeoutMs: 15_000 });
     const stdout = Array.isArray(execution.logs?.stdout) ? execution.logs.stdout.join("") : "";
     const stderr = Array.isArray(execution.logs?.stderr) ? execution.logs.stderr.join("") : "";
