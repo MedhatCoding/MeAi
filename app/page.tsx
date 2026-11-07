@@ -490,7 +490,7 @@ ${doc.content.slice(0,40000)}
       </div>
       {notice&&<div className="toast"><span>{notice}</span><button onClick={()=>setNotice("")} aria-label="إغلاق"><X size={16}/></button></div>}
       <input ref={fileRef} type="file" multiple hidden onChange={e=>uploadFiles(e.target.files)}/>
-      {section!=="chat"&&<footer className="app-footer">Medhat AI <span>•</span> واجهة تجريبية متجاوبة <span>•</span> التكاملات الخلفية تُفعّل تدريجيًا</footer>}
+      
     </section>
     <nav className="mobile-bottom-nav">{nav.filter(n=>["chat","agent","tasks","workspace","images"].includes(n.id)).map(n=><button key={n.id} className={section===n.id?"selected":""} onClick={()=>changeSection(n.id)}><n.icon size={19}/><span>{n.label==="توليد الصور"?"الصور":n.label==="مساحة العمل"?"الملفات":n.label==="الوكيل الذكي"?"الوكيل":n.label}</span></button>)}<button onClick={()=>setMobileNavOpen(v=>!v)}><Menu size={19}/><span>المزيد</span></button></nav>
   </main>;
