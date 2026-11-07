@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, CircleHelp, Menu, MessageCircle, MoreHorizontal, ShieldCheck, Sparkles, SquarePen, X, PanelLeftClose, PanelLeft, Sun, Moon } from "lucide-react";
-import { nav, readMessages } from "./lib/shared";
-import type { Message, Section } from "./lib/shared";
+import { ChevronDown, CircleHelp, Menu, MessageCircle, MoreHorizontal, ShieldCheck, Sparkles, SquarePen, Trash2, X, PanelLeftClose, PanelLeft, Sun, Moon } from "lucide-react";
+import { nav, readConversations } from "./lib/shared";
+import type { AgentSource, AgentTraceItem, ChatMode, Message, ResearchResult, Section } from "./lib/shared";
 import AgentSection from "./sections/agent";
 import ChatSection from "./sections/chat";
 import ImagesSection from "./sections/images";
@@ -18,6 +18,9 @@ import WorkspaceSection from "./sections/workspace";
 export default function Home() {
   const [section, setSection] = useState<Section>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conversations, setConversations] = useState<{ id: string; title: string; updatedAt: string; messages: Message[] }[]>([]);
+  const [activeId, setActiveId] = useState("");
+  const [composerMode, setComposerMode] = useState<ChatMode>("chat");
   const [input, setInput] = useState("");
   const [researchQuery, setResearchQuery] = useState("");
   const [researchBusy, setResearchBusy] = useState(false);
@@ -76,7 +79,13 @@ export default function Home() {
   const active = useMemo(() => nav.find(n => n.id === section)!, [section]);
 
   useEffect(() => { try { const token = sessionStorage.getItem("meai-access-token") || ""; const user = sessionStorage.getItem("meai-account-user"); if (token && user) { setAccountToken(token); setAccountUser(JSON.parse(user) as {id:string;email:string}); } } catch {} }, []);
-  useEffect(() => { setMessages(readMessages()); try { setDark(localStorage.getItem("medhat-theme") !== "light"); setFiles(JSON.parse(localStorage.getItem("medhat-files-v1") || "[]") as string[]); setDocuments(JSON.parse(localStorage.getItem("medhat-documents-v1") || "[]") as {name:string;content:string;size:number;updatedAt:string}[]); setArtifacts(JSON.parse(localStorage.getItem("medhat-artifacts-v1") || "[]") as {filename:string;content:string;summary:string;createdAt:string}[]); setMemories(JSON.parse(localStorage.getItem("medhat-memory-v1") || "[]") as string[]); setTasks(JSON.parse(localStorage.getItem("medhat-tasks-v1") || JSON.stringify([{title:"مراجعة المشروع واكتشاف الأخطاء",done:false},{title:"تحسين واجهة Medhat AI",done:true}])) as {title:string;done:boolean}[]); } catch {} }, []);
+  useEffect(() => {
+    const convs = readConversations();
+    setConversations(convs);
+    const savedActive = localStorage.getItem("medhat-active-chat-v1") || "";
+    const active = convs.find(c => c.id === savedActive) || convs[0];
+    if (active) { setActiveId(active.id); setMessages(active.messages); }
+    try { setDark(localStorage.getItem("medhat-theme") !== "light"); setFiles(JSON.parse(localStorage.getItem("medhat-files-v1") || "[]") as string[]); setDocuments(JSON.parse(localStorage.getItem("medhat-documents-v1") || "[]") as {name:string;content:string;size:number;updatedAt:string}[]); setArtifacts(JSON.parse(localStorage.getItem("medhat-artifacts-v1") || "[]") as {filename:string;content:string;summary:string;createdAt:string}[]); setMemories(JSON.parse(localStorage.getItem("medhat-memory-v1") || "[]") as string[]); setTasks(JSON.parse(localStorage.getItem("medhat-tasks-v1") || JSON.stringify([{title:"مراجعة المشروع واكتشاف الأخطاء",done:false},{title:"تحسين واجهة Medhat AI",done:true}])) as {title:string;done:boolean}[]); } catch {} }, []);
   useEffect(() => { fetch("/api/status", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(data => { if (data) setServiceStatus(data); }).catch(() => setServiceStatus(null)); void refreshConnectors(); void refreshGoogleStatus(); }, []);
   async function refreshConnectors() { setConnectorsChecked(false); try { const response = await fetch("/api/integrations", { cache: "no-store" }); const data = await response.json(); setConnectors(Array.isArray(data.connectors) ? data.connectors : []); } catch { setConnectors([]); } finally { setConnectorsChecked(true); } }
   async function refreshGoogleStatus() { try { const response = await fetch("/api/integrations/google?view=status", {cache:"no-store"}); const data = await response.json(); setGoogleConnected(Boolean(response.ok && data.connected)); } catch { setGoogleConnected(false); } }
@@ -143,7 +152,20 @@ export default function Home() {
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-artifacts-v1", JSON.stringify(artifacts)); }, [artifacts]);
   useEffect(() => { try { const raw = localStorage.getItem("medhat-agent-plan-v1"); if (raw) { const saved = JSON.parse(raw) as {plan?:{summary:string;steps:string[];limitations:string[]};done?:boolean[]}; if (saved.plan && Array.isArray(saved.plan.steps)) { setAgentPlan(saved.plan); setAgentDone(saved.plan.steps.map((_,i)=>Boolean(saved.done?.[i]))); } } } catch {} }, []);
   useEffect(() => { if (typeof window !== "undefined" && agentPlan) localStorage.setItem("medhat-agent-plan-v1", JSON.stringify({plan:agentPlan,done:agentDone})); }, [agentPlan,agentDone]);
-  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-chat-v1", JSON.stringify(messages)); endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages]);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("medhat-chat-v1", JSON.stringify(messages));
+    if (activeId) {
+      const idx = conversations.findIndex(c => c.id === activeId);
+      if (idx !== -1) {
+        const title = conversations[idx].title || (messages.find(m => m.role === "user")?.content.slice(0, 42) ?? "");
+        const next = conversations.slice();
+        next[idx] = { ...conversations[idx], title, updatedAt: new Date().toISOString(), messages };
+        setConversations(next);
+        if (!busy) persistConversations(next);
+      }
+    }
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, busy]);
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; if (typeof window !== "undefined") localStorage.setItem("medhat-theme", dark ? "dark" : "light"); }, [dark]);
 
   async function executeAgentTask() {
@@ -233,7 +255,7 @@ ${data.error.name}: ${data.error.value}` : ""));
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر إنشاء الملف.");
       const a = data.artifact as {filename:string;content:string;summary:string};
-      const next = [{...a, createdAt:new Date().toISOString()}, ...artifacts].slice(0,20);
+      const next = [{...a, createdAt:new Date().toISOString()}, ...artifacts].slice(0,50);
       setArtifacts(next); localStorage.setItem("medhat-artifacts-v1", JSON.stringify(next));
       setNotice("تم إنشاء مسودة الملف وحفظها محليًا. لم يتم تشغيلها أو تعديل ملفات GitHub.");
       setSection("workspace");
@@ -260,11 +282,16 @@ ${data.error.name}: ${data.error.value}` : ""));
 
   async function sendMessage(value = input) {
     const text = value.trim(); if (!text || busy) return;
-    const now = () => new Date().toLocaleTimeString("ar-EG", {hour:"2-digit",minute:"2-digit"});
-    const next: Message[] = [...messages, { role: "user", content: text, time: now() }, { role: "assistant", content: "", time: now() }];
+    const stamp = () => new Date().toLocaleTimeString("ar-EG", {hour:"2-digit",minute:"2-digit"});
+    const next: Message[] = [...messages, { role: "user", content: text, time: stamp() }, { role: "assistant", content: "", time: stamp() }];
     setMessages(next); setInput(""); setBusy(true); setNotice("");
+    await streamInto(next.slice(0, -1), "");
+  }
+
+  async function streamInto(history: Message[], prefix: string) {
+    let answer = "";
     try {
-      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: next.slice(0,-1).map(m => ({role:m.role, content:m.content})), documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,7000) })) }) });
+      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: history.map(m => ({role:m.role, content:m.content})), documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,7000) })) }) });
       if (!res.ok) {
         let detail = "فشل الاتصال بخدمة الذكاء الاصطناعي.";
         try { const data = await res.json() as {error?:string}; if (data.error) detail = data.error; } catch {}
@@ -274,7 +301,6 @@ ${data.error.name}: ${data.error.value}` : ""));
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let answer = "";
       let finished = false;
       while (!finished) {
         const { value: chunk, done } = await reader.read();
@@ -293,7 +319,8 @@ ${data.error.name}: ${data.error.value}` : ""));
               const piece = parsed.choices?.[0]?.delta?.content;
               if (piece) {
                 answer += piece;
-                setMessages(old => old.map((m,i) => i === old.length-1 ? {...m, content:answer} : m));
+                const text = prefix + answer;
+                setMessages(old => old.map((m,i) => i === old.length-1 ? {...m, content:text} : m));
               }
               if (parsed.choices?.[0]?.finish_reason) finished = true;
             } catch (err) {
@@ -311,28 +338,112 @@ ${data.error.name}: ${data.error.value}` : ""));
         if (last?.role === "assistant" && !last.content) return old.slice(0,-1);
         return old;
       });
+    }
+  }
+
+  async function handleSend(value = input, mode = composerMode) {
+    const text = value.trim();
+    if (!text || busy) return;
+    if (mode === "chat") { await sendMessage(text); return; }
+    const stamp = () => new Date().toLocaleTimeString("ar-EG", {hour:"2-digit",minute:"2-digit"});
+    const next: Message[] = [...messages, { role: "user", content: text, time: stamp() }, { role: "assistant", content: "", time: stamp() }];
+    setMessages(next); setInput(""); setBusy(true); setNotice("");
+    const patchLast = (patch: Partial<Message>) => setMessages(old => old.map((m,i) => i === old.length-1 ? { ...m, ...patch } : m));
+    try {
+      if (mode === "image") {
+        patchLast({ content: "جارٍ توليد الصورة..." });
+        const res = await fetch("/api/images/generate", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ prompt: text, aspect: "1:1", style: "واقعي" }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "تعذر توليد الصورة.");
+        patchLast({ content: "اتفضل الصورة المولّدة. تحب أعدّل فيها أي تفاصيل؟", image: String(data.image || "") });
+      } else if (mode === "research") {
+        patchLast({ content: "جارٍ البحث على الويب..." });
+        const res = await fetch("/api/search", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ query: text }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "تعذر البحث.");
+        const results = Array.isArray(data.results) ? data.results as ResearchResult[] : [];
+        if (!results.length) { patchLast({ content: "لم أجد نتائج لهذا البحث. جرّب صياغة أدق أو كلمات مفتاحية أوضح." }); return; }
+        patchLast({ sources: results });
+        const evidence = results.map((r, i) => String(i+1) + ". " + r.title + "\n" + (r.date ? "التاريخ: " + r.date + "\n" : "") + (r.snippet || "") + "\nالمصدر: " + r.url).join("\n\n");
+        const enriched = text + "\n\nحلّل نتائج البحث التالية وأجب عن طلبي بخلاصة واضحة مع ربط كل معلومة بمصدرها ورابطها. لا تضف حقائق غير مدعومة بالمقتطفات، واذكر أن التحليل أولي لأن المحتوى الكامل للصفحات لم يُقرأ.\n\n" + evidence;
+        const history = next.slice(0, -1);
+        history[history.length - 1] = { ...history[history.length - 1], content: enriched };
+        await streamInto(history, "وجدت " + results.length + " نتائج لبحثك، ودي خلاصة التحليل:\n\n");
+      } else if (mode === "agent") {
+        patchLast({ content: "جارٍ تنفيذ المهمة بالوكيل والأدوات..." });
+        const res = await fetch("/api/agent/execute", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ task: text, documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,5000) })) }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "تعذر تنفيذ المهمة.");
+        const tools = Array.isArray(data.toolsUsed) ? (data.toolsUsed as string[]).filter(t => typeof t === "string") : [];
+        const trace = Array.isArray(data.toolTrace) ? (data.toolTrace as AgentTraceItem[]).filter(t => t && typeof t.tool === "string" && typeof t.detail === "string") : [];
+        const sources = Array.isArray(data.searchSources) ? (data.searchSources as AgentSource[]).filter(s => s && typeof s.title === "string" && typeof s.url === "string").map(s => ({ title: s.title, url: s.url, snippet: typeof s.date === "string" ? "التاريخ: " + s.date : "", date: typeof s.date === "string" ? s.date : null, position: null })) : [];
+        patchLast({ content: String(data.answer || ""), tools, trace, sources });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "تعذر إتمام الطلب.";
+      setNotice(message);
+      setMessages(old => {
+        const last = old[old.length-1];
+        if (last?.role === "assistant" && !last.content) return old.slice(0,-1);
+        return old.map((m,i) => i === old.length-1 && m.role === "assistant" && m.content.indexOf("جارٍ") === 0 ? { ...m, content: "تعذر إتمام الطلب: " + message } : m);
+      });
     } finally { setBusy(false); }
   }
+
+  function persistConversations(list: { id: string; title: string; updatedAt: string; messages: Message[] }[]) {
+    try { localStorage.setItem("medhat-conversations-v1", JSON.stringify(list)); } catch {}
+  }
+
+  function newChat() {
+    const id = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    const conv = { id, title: "", updatedAt: new Date().toISOString(), messages: [] as Message[] };
+    const next = [conv, ...conversations].slice(0, 60);
+    setConversations(next); setActiveId(id); setMessages([]);
+    persistConversations(next);
+    try { localStorage.setItem("medhat-active-chat-v1", id); } catch {}
+    setSection("chat"); setMobileNavOpen(false); setNotice("");
+  }
+
+  function switchConversation(id: string) {
+    const conv = conversations.find(c => c.id === id); if (!conv) return;
+    setActiveId(id); setMessages(conv.messages);
+    try { localStorage.setItem("medhat-active-chat-v1", id); } catch {}
+    setSection("chat"); setMobileNavOpen(false); setNotice("");
+  }
+
+  function deleteConversation(id: string, e: { stopPropagation: () => void }) {
+    e.stopPropagation();
+    const next = conversations.filter(c => c.id !== id);
+    setConversations(next); persistConversations(next);
+    if (activeId === id) {
+      const fallback = next[0];
+      if (fallback) {
+        setActiveId(fallback.id); setMessages(fallback.messages);
+        try { localStorage.setItem("medhat-active-chat-v1", fallback.id); } catch {}
+      } else { setActiveId(""); setMessages([]); }
+    }
+  }
+
   async function uploadFiles(list: FileList | null) {
     if (!list?.length) return;
     const supported = /\.(txt|md|csv|json|ya?ml|toml|html?|xml|js|jsx|ts|tsx|py|css|sql|log)$/i;
     const incoming = Array.from(list);
-    const accepted = incoming.filter(file => supported.test(file.name) && file.size <= 200_000);
+    const accepted = incoming.filter(file => supported.test(file.name) && file.size <= 2_000_000);
     const skipped = incoming.length - accepted.length;
     const parsed: {name:string;content:string;size:number;updatedAt:string}[] = [];
     for (const file of accepted) {
       try {
-        const content = (await file.text()).slice(0, 20_000);
+        const content = (await file.text()).slice(0, 40_000);
         parsed.push({name:file.name,content,size:file.size,updatedAt:new Date().toISOString()});
       } catch { /* ignore unreadable file */ }
     }
-    const mergedDocs = [...documents.filter(d => !parsed.some(p => p.name === d.name)), ...parsed].slice(-12);
+    const mergedDocs = [...documents.filter(d => !parsed.some(p => p.name === d.name)), ...parsed].slice(-40);
     try {
       localStorage.setItem("medhat-documents-v1", JSON.stringify(mergedDocs));
-      const names = [...new Set([...files, ...incoming.map(file=>file.name)])].slice(-30);
+      const names = [...new Set([...files, ...incoming.map(file=>file.name)])].slice(-200);
       localStorage.setItem("medhat-files-v1", JSON.stringify(names));
       setDocuments(mergedDocs); setFiles(names);
-      setNotice(`تمت قراءة محتوى ${parsed.length} ملف وحفظه على هذا الجهاز.${skipped ? ` تم تخطي ${skipped} ملف: الأنواع المدعومة نصية فقط وبحد أقصى 200KB للملف.` : ""}`);
+      setNotice(`تمت قراءة محتوى ${parsed.length} ملف وحفظه على هذا الجهاز.${skipped ? ` تم تخطي ${skipped} ملف: الأنواع المدعومة نصية فقط وبحد أقصى 2MB للملف.` : ""}`);
     } catch {
       setNotice("مساحة التخزين المحلية ممتلئة. قلّل عدد الملفات أو أحجامها ثم أعد المحاولة.");
     }
@@ -357,9 +468,9 @@ ${doc.content.slice(0,12000)}
   return <main className={`app-shell ${dark ? "dark" : "light"}`}>
     {sidebarOpen && <aside className={`sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
       <div className="brand-row"><div className="brand-mark"><Sparkles size={20}/></div><div className="brand-copy"><b>Medhat AI</b><span>مساعدك الذكي</span></div><button className="icon-btn collapse-btn" aria-label="إخفاء القائمة" onClick={() => setSidebarOpen(false)}><PanelLeftClose size={18}/></button></div>
-      <button className="new-chat" onClick={() => { setMessages([]); changeSection("chat"); }}><SquarePen size={17}/> محادثة جديدة <span>⌘ K</span></button>
+      <button className="new-chat" onClick={() => { newChat(); }}><SquarePen size={17}/> محادثة جديدة <span>⌘ K</span></button>
       <div className="nav-scroll">{["الرئيسية","الأدوات","النظام"].map(group => <div className="nav-group" key={group}><div className="group-label">{group}</div>{nav.filter(n=>n.group===group).map(n=><button key={n.id} className={`nav-item ${section===n.id?"active":""}`} onClick={()=>changeSection(n.id)}><n.icon size={18}/><span>{n.label}</span>{n.id==="agent"&&<i className="nav-dot"/>}</button>)}</div>)}
-        <div className="side-divider"/><div className="group-label">المحادثات الأخيرة</div>{messages.length ? <button className="recent-chat" onClick={()=>changeSection("chat")}><MessageCircle size={16}/><span>{messages.find(m=>m.role==="user")?.content.slice(0,30) || "محادثة جديدة"}</span></button> : <div className="empty-history">لا توجد محادثات سابقة بعد</div>}
+        <div className="side-divider"/><div className="group-label">سجل المحادثات</div><div className="chats-scroll">{conversations.length ? conversations.map(c => <div key={c.id} className={"chat-item" + (activeId === c.id && section === "chat" ? " active" : "")} onClick={() => switchConversation(c.id)}><MessageCircle size={15}/><span>{c.title || "محادثة جديدة"}</span><button className="chat-del" aria-label="حذف المحادثة" onClick={e => deleteConversation(c.id, e)}><Trash2 size={13}/></button></div>) : <div className="empty-history">لا توجد محادثات سابقة بعد</div>}</div>
       </div>
       <div className="sidebar-bottom"><div className="connection"><span className="status-light"/><div><b>مساحة شخصية</b><small>البيانات محفوظة على الجهاز</small></div><ShieldCheck size={17}/></div><button className="profile-row" onClick={()=>changeSection("settings")}><div className="avatar">م</div><div><b>Medhat</b><small>المساعد الشخصي</small></div><MoreHorizontal size={18}/></button></div>
     </aside>}
@@ -368,7 +479,7 @@ ${doc.content.slice(0,12000)}
       {mobileNavOpen&&<button className="mobile-scrim" onClick={()=>setMobileNavOpen(false)} aria-label="إغلاق القائمة"/>}
       <div className="content-area">
         {section==="research"&&<ResearchSection researchQuery={researchQuery} setResearchQuery={setResearchQuery} researchBusy={researchBusy} researchData={researchData} busy={busy} setSection={setSection} sendMessage={sendMessage} runResearch={runResearch} />}
-        {section==="chat"&&<ChatSection messages={messages} input={input} setInput={setInput} busy={busy} endRef={endRef} fileRef={fileRef} sendMessage={sendMessage} changeSection={changeSection} />}
+        {section==="chat"&&<ChatSection messages={messages} input={input} setInput={setInput} busy={busy} endRef={endRef} fileRef={fileRef} composerMode={composerMode} setComposerMode={setComposerMode} handleSend={handleSend} />}
         {section==="agent"&&<AgentSection setInput={setInput} changeSection={changeSection} agentTask={agentTask} setAgentTask={setAgentTask} agentBusy={agentBusy} agentResult={agentResult} agentTools={agentTools} agentTrace={agentTrace} agentSources={agentSources} executeAgentTask={executeAgentTask} codeLanguage={codeLanguage} setCodeLanguage={setCodeLanguage} codeInput={codeInput} setCodeInput={setCodeInput} codeOutput={codeOutput} codeBusy={codeBusy} runAgentCode={runAgentCode} editPath={editPath} setEditPath={setEditPath} editInstruction={editInstruction} setEditInstruction={setEditInstruction} editBusy={editBusy} applyProjectEdit={applyProjectEdit} setNotice={setNotice} />}
         {section==="tasks"&&<TasksSection tasks={tasks} setTasks={setTasks} />}
         {section==="workspace"&&<WorkspaceSection fileRef={fileRef} artifacts={artifacts} setArtifacts={setArtifacts} files={files} setFiles={setFiles} documents={documents} setDocuments={setDocuments} downloadArtifact={downloadArtifact} analyzeDocument={analyzeDocument} accountToken={accountToken} setNotice={setNotice} />}

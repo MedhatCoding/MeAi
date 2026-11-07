@@ -3,7 +3,7 @@
 import { Bot, Brain, FolderOpen, Image as ImageIcon, Layers3, MessageCircle, Search, Settings2, Video } from "lucide-react";
 
 export type Section = "chat" | "research" | "agent" | "tasks" | "workspace" | "images" | "video" | "memory" | "settings";
-export type Message = { role: "user" | "assistant"; content: string; time: string };
+export type Message = { role: "user" | "assistant"; content: string; time: string; sources?: ResearchResult[]; image?: string; tools?: string[]; trace?: AgentTraceItem[] };
 export type ResearchResult = { title: string; url: string; snippet: string; date: string | null; position: number | null };
 export type TaskItem = { title: string; done: boolean };
 export type WorkspaceDocument = { name: string; content: string; size: number; updatedAt: string };
@@ -13,6 +13,8 @@ export type AgentSource = { title: string; url: string; date?: string };
 export type ServiceStatus = { configured: boolean; provider: string | null; model: string | null; features?: { agentExecution: boolean; imageGeneration: boolean; videoGeneration: boolean; persistentCloudMemory: boolean } };
 export type ConnectorInfo = { id: string; label: string; configured: boolean; connected: boolean; verified: boolean; mode: string; detail: string };
 export type AccountUser = { id: string; email: string };
+export type ChatMode = "chat" | "research" | "image" | "agent";
+export type Conversation = { id: string; title: string; updatedAt: string; messages: Message[] };
 
 export const nav: { id: Section; label: string; icon: typeof MessageCircle; group: string }[] = [
   { id: "chat", label: "المحادثة", icon: MessageCircle, group: "الرئيسية" },
@@ -28,5 +30,18 @@ export const nav: { id: Section; label: string; icon: typeof MessageCircle; grou
 
 export function readMessages(): Message[] {
   try { const raw = localStorage.getItem("medhat-chat-v1"); return raw ? JSON.parse(raw) as Message[] : []; } catch { return []; }
+}
+export function readConversations(): Conversation[] {
+  try {
+    const raw = localStorage.getItem("medhat-conversations-v1");
+    const saved = raw ? JSON.parse(raw) as Conversation[] : null;
+    if (Array.isArray(saved) && saved.length > 0) return saved.filter(c => c && typeof c.id === "string" && Array.isArray(c.messages));
+    const legacy = readMessages();
+    if (legacy.length > 0) {
+      const first = legacy.find(m => m.role === "user")?.content.slice(0, 42) ?? "";
+      return [{ id: "legacy", title: first || "محادثة سابقة", updatedAt: new Date().toISOString(), messages: legacy }];
+    }
+    return [];
+  } catch { return []; }
 }
 export function titleFor(section: Section) { return nav.find(x => x.id === section)?.label ?? "المحادثة"; }
