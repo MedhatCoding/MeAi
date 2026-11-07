@@ -69,3 +69,31 @@
 .hero-copy{flex:1;min-width:0}
 .hero-action{margin-inline-start:auto;flex:0 0 auto;align-self:center}
 @media(max-width:650px){.hero-action{width:100%;justify-content:center}}
+/* ===== إحساس تطبيق موبايل أصلي (Native app feel) ===== */
+*{-webkit-tap-highlight-color:transparent}
+body{overscroll-behavior-y:none}
+@keyframes appFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.chat-page,.section-page{animation:appFade .28s ease both}
+.primary-btn:active,.secondary-btn:active,.mode-chip:active,.suggestion-card:active,.choice:active,.send-btn:active,.tool-btn:active{transform:scale(.96);transition:.08s}
+@media(max-width:650px){
+.topbar{height:calc(54px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 12px 0;border-bottom:0}
+.crumb{font-size:14.5px;font-weight:800;letter-spacing:-.2px}
+.crumb svg{display:none}
+.app-footer{display:none}
+*{scrollbar-width:none}
+::-webkit-scrollbar{display:none}
+.icon-btn{width:40px;height:40px}
+.new-chat span{display:none}
+.sidebar{border-radius:24px 0 0 24px;border-left:0}
+.form-card,.list-card,.settings-card{border-radius:18px;border-color:transparent;box-shadow:0 2px 12px #00000026}
+.composer{border-radius:22px;box-shadow:0 10px 34px #00000038}
+.mobile-bottom-nav{border-top:0;box-shadow:0 -8px 30px #00000030}
+.mobile-bottom-nav button{font-size:9.5px}
+.mobile-bottom-nav button.selected svg{transform:translateY(-1px) scale(1.08)}
+.message-row.user .message-avatar{display:none}
+.message-row.user .message-meta{display:none}
+.message-row.user{flex-direction:row-reverse}
+.message-row.user .message-main{max-width:85%}
+.message-row.user .message-text{background:linear-gradient(140deg,#8b5cf629,#8b5cf612);border-color:#a78bfa3d;border-radius:18px 18px 4px 18px}
+.content-area{padding:0 14px}
+}
