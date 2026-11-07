@@ -79,7 +79,7 @@ export default function Home() {
   const active = useMemo(() => nav.find(n => n.id === section)!, [section]);
 
   useEffect(() => { try { const token = sessionStorage.getItem("meai-access-token") || ""; const user = sessionStorage.getItem("meai-account-user"); if (token && user) { setAccountToken(token); setAccountUser(JSON.parse(user) as {id:string;email:string}); } } catch {} }, []);
-    useEffect(() => {
+  useEffect(() => {
     const convs = readConversations();
     setConversations(convs);
     const savedActive = localStorage.getItem("medhat-active-chat-v1") || "";
@@ -152,7 +152,7 @@ export default function Home() {
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-artifacts-v1", JSON.stringify(artifacts)); }, [artifacts]);
   useEffect(() => { try { const raw = localStorage.getItem("medhat-agent-plan-v1"); if (raw) { const saved = JSON.parse(raw) as {plan?:{summary:string;steps:string[];limitations:string[]};done?:boolean[]}; if (saved.plan && Array.isArray(saved.plan.steps)) { setAgentPlan(saved.plan); setAgentDone(saved.plan.steps.map((_,i)=>Boolean(saved.done?.[i]))); } } } catch {} }, []);
   useEffect(() => { if (typeof window !== "undefined" && agentPlan) localStorage.setItem("medhat-agent-plan-v1", JSON.stringify({plan:agentPlan,done:agentDone})); }, [agentPlan,agentDone]);
-    useEffect(() => {
+  useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("medhat-chat-v1", JSON.stringify(messages));
     if (activeId) {
       const idx = conversations.findIndex(c => c.id === activeId);
@@ -376,7 +376,7 @@ ${data.error.name}: ${data.error.value}` : ""));
         if (!res.ok) throw new Error(data.error || "تعذر تنفيذ المهمة.");
         const tools = Array.isArray(data.toolsUsed) ? (data.toolsUsed as string[]).filter(t => typeof t === "string") : [];
         const trace = Array.isArray(data.toolTrace) ? (data.toolTrace as AgentTraceItem[]).filter(t => t && typeof t.tool === "string" && typeof t.detail === "string") : [];
-        const sources = Array.isArray(data.searchSources) ? (data.searchSources as AgentSource[]).filter(s => s && typeof s.title === "string" && typeof s.url === "string") : [];
+        const sources = Array.isArray(data.searchSources) ? (data.searchSources as AgentSource[]).filter(s => s && typeof s.title === "string" && typeof s.url === "string").map(s => ({ title: s.title, url: s.url, snippet: typeof s.date === "string" ? "التاريخ: " + s.date : "", date: typeof s.date === "string" ? s.date : null, position: null })) : [];
         patchLast({ content: String(data.answer || ""), tools, trace, sources });
       }
     } catch (e) {
@@ -470,7 +470,7 @@ ${doc.content.slice(0,12000)}
       <div className="brand-row"><div className="brand-mark"><Sparkles size={20}/></div><div className="brand-copy"><b>Medhat AI</b><span>مساعدك الذكي</span></div><button className="icon-btn collapse-btn" aria-label="إخفاء القائمة" onClick={() => setSidebarOpen(false)}><PanelLeftClose size={18}/></button></div>
       <button className="new-chat" onClick={() => { newChat(); }}><SquarePen size={17}/> محادثة جديدة <span>⌘ K</span></button>
       <div className="nav-scroll">{["الرئيسية","الأدوات","النظام"].map(group => <div className="nav-group" key={group}><div className="group-label">{group}</div>{nav.filter(n=>n.group===group).map(n=><button key={n.id} className={`nav-item ${section===n.id?"active":""}`} onClick={()=>changeSection(n.id)}><n.icon size={18}/><span>{n.label}</span>{n.id==="agent"&&<i className="nav-dot"/>}</button>)}</div>)}
-        <div className="side-divider"/><div className="group-label">المحادثات الأخيرة</div><div className="group-label">سجل المحادثات</div><div className="chats-scroll">{conversations.length ? conversations.map(c => <div key={c.id} className={"chat-item" + (activeId === c.id && section === "chat" ? " active" : "")} onClick={() => switchConversation(c.id)}><MessageCircle size={15}/><span>{c.title || "محادثة جديدة"}</span><button className="chat-del" aria-label="حذف المحادثة" onClick={e => deleteConversation(c.id, e)}><Trash2 size={13}/></button></div>) : <div className="empty-history">لا توجد محادثات سابقة بعد</div>}</div>
+        <div className="side-divider"/><div className="group-label">سجل المحادثات</div><div className="chats-scroll">{conversations.length ? conversations.map(c => <div key={c.id} className={"chat-item" + (activeId === c.id && section === "chat" ? " active" : "")} onClick={() => switchConversation(c.id)}><MessageCircle size={15}/><span>{c.title || "محادثة جديدة"}</span><button className="chat-del" aria-label="حذف المحادثة" onClick={e => deleteConversation(c.id, e)}><Trash2 size={13}/></button></div>) : <div className="empty-history">لا توجد محادثات سابقة بعد</div>}</div>
       </div>
       <div className="sidebar-bottom"><div className="connection"><span className="status-light"/><div><b>مساحة شخصية</b><small>البيانات محفوظة على الجهاز</small></div><ShieldCheck size={17}/></div><button className="profile-row" onClick={()=>changeSection("settings")}><div className="avatar">م</div><div><b>Medhat</b><small>المساعد الشخصي</small></div><MoreHorizontal size={18}/></button></div>
     </aside>}
