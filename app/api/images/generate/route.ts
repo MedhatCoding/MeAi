@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   if (originError) return originError;
   const accessError = await enforceApiAccess(request);
   if (accessError) return accessError;
-  const rateError = enforceRateLimit(request, "image-generation", 5);
+  const rateError = enforceRateLimit(request, "image-generation", 20);
   if (rateError) return rateError;
   let prompt = "";
   let aspect = "1:1";
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as { prompt?: unknown; aspect?: unknown; style?: unknown };
     if (typeof body.prompt !== "string") return Response.json({ error: "اكتب وصف الصورة." }, { status: 400 });
     prompt = body.prompt.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, " ").trim();
-    if (prompt.length < 4 || prompt.length > 1800) return Response.json({ error: "الوصف يجب أن يكون بين 4 و1800 حرف." }, { status: 400 });
+    if (prompt.length < 4 || prompt.length > 4000) return Response.json({ error: "الوصف يجب أن يكون بين 4 و4000 حرف." }, { status: 400 });
     if (body.aspect === "16:9" || body.aspect === "9:16") aspect = body.aspect;
     const style = typeof body.style === "string" ? body.style.slice(0, 40) : "";
     if (style) prompt += "\nArt direction: " + style;
