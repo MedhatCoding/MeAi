@@ -16,30 +16,30 @@ export async function POST(request: NextRequest) {
   if (originError) return originError;
   const accessError = await enforceApiAccess(request);
   if (accessError) return accessError;
-  const rateError = enforceRateLimit(request, "chat", 20);
+  const rateError = enforceRateLimit(request, "chat", 100);
   if (rateError) return rateError;
   let messages: ChatMessage[];
   let docContext = "";
   try {
     // Reject oversized payloads before JSON parsing to reduce memory/cost abuse.
     const declaredLength = Number(request.headers.get("content-length") || "0");
-    if (Number.isFinite(declaredLength) && declaredLength > 1_500_000) {
-      return jsonError("حجم الطلب أكبر من الحد المسموح (1.5MB). قلّل المرفقات أو ابدأ محادثة جديدة.", 413);
+    if (Number.isFinite(declaredLength) && declaredLength > 6_000_000) {
+      return jsonError("حجم الطلب أكبر من الحد المسموح (6MB). قلّل المرفقات أو ابدأ محادثة جديدة.", 413);
     }
     const rawBody = await request.text();
-    if (rawBody.length > 1_500_000) {
-      return jsonError("حجم الطلب أكبر من الحد المسموح (1.5MB). قلّل المرفقات أو ابدأ محادثة جديدة.", 413);
+    if (rawBody.length > 6_000_000) {
+      return jsonError("حجم الطلب أكبر من الحد المسموح (6MB). قلّل المرفقات أو ابدأ محادثة جديدة.", 413);
     }
     const body = JSON.parse(rawBody) as { messages?: unknown; documents?: unknown };
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
       return jsonError("أرسل رسالة واحدة على الأقل.", 400);
     }
-    if (body.messages.length > 60) return jsonError("المحادثة طويلة جدًا؛ ابدأ محادثة جديدة أو اختصر السياق.", 413);
+    if (body.messages.length > 200) return jsonError("المحادثة طويلة جدًا؛ ابدأ محادثة جديدة أو اختصر السياق.", 413);
     const incoming = body.messages as unknown[];
     if (incoming.some((item) => !item || typeof item !== "object" ||
       !["user", "assistant"].includes(String((item as {role?:unknown}).role)) ||
       typeof (item as {content?:unknown}).content !== "string" ||
-      ((item as {content:string}).content.length > 30_000))) {
+      ((item as {content:string}).content.length > 45_000))) {
       return jsonError("صيغة الرسائل غير صحيحة أو تتجاوز الحد المسموح.", 400);
     }
     messages = incoming.map((item) => {
@@ -47,16 +47,16 @@ export async function POST(request: NextRequest) {
       return {role:m.role,content:m.content};
     });
     const totalChars = messages.reduce((sum,m)=>sum+m.content.length,0);
-    if (totalChars > 120_000) return jsonError("حجم سياق المحادثة أكبر من الحد المسموح (120 ألف حرف).", 413);
+    if (totalChars > 400_000) return jsonError("حجم سياق المحادثة أكبر من الحد المسموح (400 ألف حرف).", 413);
     // Bound provider cost while retaining enough recent conversational context.
-    messages = messages.slice(-40);
-    const docs = Array.isArray(body.documents) ? body.documents.slice(0, 12).flatMap((item) => {
+    messages = messages.slice(-100);
+    const docs = Array.isArray(body.documents) ? body.documents.slice(0, 40).flatMap((item) => {
       if (!item || typeof item !== "object") return [];
       const doc = item as {name?:unknown;content?:unknown};
       if (typeof doc.name !== "string" || typeof doc.content !== "string") return [];
-      return [{ name: doc.name.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 120), content: doc.content.slice(0, 7000) }];
+      return [{ name: doc.name.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200), content: doc.content.slice(0, 20000) }];
     }) : [];
-    docContext = docs.length ? docs.map((d,i) => `[ملف مرفق ${i+1}: ${d.name}]\n${d.content}`).join("\n\n").slice(0, 26000) : "";
+    docContext = docs.length ? docs.map((d,i) => `[ملف مرفق ${i+1}: ${d.name}]\n${d.content}`).join("\n\n").slice(0, 200_000) : "";
   } catch {
     return jsonError("تعذر قراءة الطلب.", 400);
   }

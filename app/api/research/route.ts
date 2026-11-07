@@ -16,18 +16,18 @@ export async function POST(request: NextRequest) {
   if (originError) return originError;
   const accessError = await enforceApiAccess(request);
   if (accessError) return accessError;
-  const rateError = enforceRateLimit(request, "research", 8);
+  const rateError = enforceRateLimit(request, "research", 30);
   if (rateError) return rateError;
   let query = "";
   try {
     const declaredLength = Number(request.headers.get("content-length") || "0");
-    if (Number.isFinite(declaredLength) && declaredLength > 16_000) return fail("حجم طلب البحث أكبر من المسموح.", 413);
+    if (Number.isFinite(declaredLength) && declaredLength > 64_000) return fail("حجم طلب البحث أكبر من المسموح.", 413);
     const raw = await request.text();
-    if (raw.length > 16_000) return fail("حجم طلب البحث أكبر من المسموح.", 413);
+    if (raw.length > 64_000) return fail("حجم طلب البحث أكبر من المسموح.", 413);
     const body = JSON.parse(raw) as { query?: unknown };
     if (typeof body.query !== "string") return fail("اكتب سؤال البحث.", 400);
     query = body.query.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
-    if (query.length < 4 || query.length > 1200) return fail("السؤال يجب أن يكون بين 4 و1200 حرف.", 400);
+    if (query.length < 4 || query.length > 4000) return fail("السؤال يجب أن يكون بين 4 و4000 حرف.", 400);
   } catch {
     return fail("تعذر قراءة الطلب.", 400);
   }
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch("https://google.serper.dev/search", {
       method: "POST",
       headers: { "X-API-KEY": searchKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ q: query.slice(0, 300), gl: "eg", hl: "ar", num: 8 }),
+      body: JSON.stringify({ q: query.slice(0, 300), gl: "eg", hl: "ar", num: 10 }),
       cache: "no-store",
       signal: AbortSignal.timeout(12000),
     });
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
           ...(typeof item.date === "string" ? { date: item.date.slice(0, 80) } : {}),
         }];
       } catch { return []; }
-    }).slice(0, 8);
+    }).slice(0, 10);
   } catch {
     return fail("انتهت مهلة البحث أو تعذر الاتصال.", 504);
   }

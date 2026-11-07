@@ -10,23 +10,23 @@ export async function POST(request: NextRequest) {
   if (originError) return originError;
   const accessError = await enforceApiAccess(request);
   if (accessError) return accessError;
-  const rateError = enforceRateLimit(request, "search", 12);
+  const rateError = enforceRateLimit(request, "search", 60);
   if (rateError) return rateError;
 
   const declaredLength = Number(request.headers.get("content-length") || "0");
-  if (Number.isFinite(declaredLength) && declaredLength > 8_000) {
+  if (Number.isFinite(declaredLength) && declaredLength > 64_000) {
     return Response.json({ error: "حجم طلب البحث أكبر من المسموح." }, { status: 413 });
   }
 
   let query = "";
   try {
     const raw = await request.text();
-    if (raw.length > 8_000) return Response.json({ error: "حجم طلب البحث أكبر من المسموح." }, { status: 413 });
+    if (raw.length > 64_000) return Response.json({ error: "حجم طلب البحث أكبر من المسموح." }, { status: 413 });
     const body = JSON.parse(raw) as { query?: unknown };
     if (typeof body.query !== "string") return Response.json({ error: "اكتب عبارة البحث." }, { status: 400 });
     query = body.query.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
-    if (query.length < 2 || query.length > 300) {
-      return Response.json({ error: "عبارة البحث يجب أن تكون بين حرفين و300 حرف." }, { status: 400 });
+    if (query.length < 2 || query.length > 1000) {
+      return Response.json({ error: "عبارة البحث يجب أن تكون بين حرفين و1000 حرف." }, { status: 400 });
     }
   } catch {
     return Response.json({ error: "تعذر قراءة الطلب." }, { status: 400 });
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const upstream = await fetch("https://google.serper.dev/search", {
       method: "POST",
       headers: { "X-API-KEY": key, "Content-Type": "application/json" },
-      body: JSON.stringify({ q: query, gl: "eg", hl: "ar", num: 8 }),
+      body: JSON.stringify({ q: query, gl: "eg", hl: "ar", num: 10 }),
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const payload = await upstream.json() as {
       organic?: { title?: unknown; link?: unknown; snippet?: unknown; date?: unknown; position?: unknown }[];
     };
-    const results = (Array.isArray(payload.organic) ? payload.organic : []).slice(0, 8).flatMap((r) => {
+    const results = (Array.isArray(payload.organic) ? payload.organic : []).slice(0, 10).flatMap((r) => {
       if (typeof r.title !== "string" || typeof r.link !== "string") return [];
       try {
         const url = new URL(r.link);

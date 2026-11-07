@@ -175,7 +175,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/agent/execute", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task, documents: documents.map(d => ({ name: d.name, content: d.content.slice(0, 5000) })) }),
+        body: JSON.stringify({ task, documents: documents.map(d => ({ name: d.name, content: d.content.slice(0, 40000) })) }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر تنفيذ المهمة.");
@@ -251,7 +251,7 @@ ${data.error.name}: ${data.error.value}` : ""));
     setArtifactBusy(true); setNotice("");
     try {
       const requestTask = agentPlan ? task + "\n\nخطة المهمة:\n" + agentPlan.steps.join("\n") : task;
-      const response = await fetch("/api/agent/artifact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({task:requestTask,format:"markdown",documents:documents.map(d=>({name:d.name,content:d.content.slice(0,7000)}))}) });
+      const response = await fetch("/api/agent/artifact", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({task:requestTask,format:"markdown",documents:documents.map(d=>({name:d.name,content:d.content.slice(0,20000)}))}) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر إنشاء الملف.");
       const a = data.artifact as {filename:string;content:string;summary:string};
@@ -291,7 +291,7 @@ ${data.error.name}: ${data.error.value}` : ""));
   async function streamInto(history: Message[], prefix: string) {
     let answer = "";
     try {
-      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: history.map(m => ({role:m.role, content:m.content})), documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,7000) })) }) });
+      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: history.map(m => ({role:m.role, content:m.content})), documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,20000) })) }) });
       if (!res.ok) {
         let detail = "فشل الاتصال بخدمة الذكاء الاصطناعي.";
         try { const data = await res.json() as {error?:string}; if (data.error) detail = data.error; } catch {}
@@ -371,7 +371,7 @@ ${data.error.name}: ${data.error.value}` : ""));
         await streamInto(history, "وجدت " + results.length + " نتائج لبحثك، ودي خلاصة التحليل:\n\n");
       } else if (mode === "agent") {
         patchLast({ content: "جارٍ تنفيذ المهمة بالوكيل والأدوات..." });
-        const res = await fetch("/api/agent/execute", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ task: text, documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,5000) })) }) });
+        const res = await fetch("/api/agent/execute", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ task: text, documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,40000) })) }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "تعذر تنفيذ المهمة.");
         const tools = Array.isArray(data.toolsUsed) ? (data.toolsUsed as string[]).filter(t => typeof t === "string") : [];
@@ -453,7 +453,7 @@ ${data.error.name}: ${data.error.value}` : ""));
 اسم الملف: ${doc.name}
 
 --- بداية المحتوى ---
-${doc.content.slice(0,12000)}
+${doc.content.slice(0,40000)}
 --- نهاية المحتوى ---`;
     setSection("chat");
     void sendMessage(prompt);
@@ -486,7 +486,7 @@ ${doc.content.slice(0,12000)}
         {section==="images"&&<ImagesSection setNotice={setNotice} imagePrompt={imagePrompt} setImagePrompt={setImagePrompt} imageAspect={imageAspect} setImageAspect={setImageAspect} imageStyle={imageStyle} setImageStyle={setImageStyle} imageBusy={imageBusy} setImageBusy={setImageBusy} generatedImage={generatedImage} setGeneratedImage={setGeneratedImage} />}
         {section==="video"&&<VideoSection setNotice={setNotice} />}
         {section==="memory"&&<MemorySection memories={memories} setMemories={setMemories} addMemory={addMemory} />}
-        {section==="settings"&&<SettingsSection setMessages={setMessages} files={files} setFiles={setFiles} setNotice={setNotice} setMemories={setMemories} accountUser={accountUser} accountEmail={accountEmail} setAccountEmail={setAccountEmail} accountPassword={accountPassword} setAccountPassword={setAccountPassword} accountBusy={accountBusy} cloudMemoryStatus={cloudMemoryStatus} signOutAccount={signOutAccount} syncCloudMemory={syncCloudMemory} authenticateAccount={authenticateAccount} dark={dark} setDark={setDark} serviceStatus={serviceStatus} connectors={connectors} connectorsChecked={connectorsChecked} refreshConnectors={refreshConnectors} googleConnected={googleConnected} googleBusy={googleBusy} googleView={googleView} googleItems={googleItems} googleStatusMessage={googleStatusMessage} runGoogleView={runGoogleView} disconnectGoogle={disconnectGoogle} />}
+        {section==="settings"&&<SettingsSection setMessages={setMessages} files={files} setFiles={setFiles} setNotice={setNotice} setMemories={setMemories} accountUser={accountUser} accountEmail={accountEmail} setAccountEmail={setAccountEmail} accountPassword={accountPassword} setAccountPassword={setAccountPassword} accountBusy={accountBusy} cloudMemoryStatus={cloudMemoryStatus} signOutAccount={signOutAccount} syncCloudMemory={syncCloudMemory} authenticateAccount={authenticateAccount} setConversations={setConversations} setActiveId={setActiveId} dark={dark} setDark={setDark} serviceStatus={serviceStatus} connectors={connectors} connectorsChecked={connectorsChecked} refreshConnectors={refreshConnectors} googleConnected={googleConnected} googleBusy={googleBusy} googleView={googleView} googleItems={googleItems} googleStatusMessage={googleStatusMessage} runGoogleView={runGoogleView} disconnectGoogle={disconnectGoogle} />}
       </div>
       {notice&&<div className="toast"><span>{notice}</span><button onClick={()=>setNotice("")} aria-label="إغلاق"><X size={16}/></button></div>}
       <input ref={fileRef} type="file" multiple hidden onChange={e=>uploadFiles(e.target.files)}/>
