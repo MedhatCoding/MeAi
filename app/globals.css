@@ -86,3 +86,30 @@ button,.choice,.mode-chip,.suggestion-card,.chat-item,.nav-item{touch-action:man
 .chat-page .composer-wrap{bottom:calc(62px + env(safe-area-inset-bottom));padding-bottom:10px}
 .app-footer{display:none}
 }
+/* ===== إعادة تصميم جذرية للموبايل بإحساس تطبيق ===== */
+@media(max-width:650px){
+body{background:radial-gradient(130% 55% at 50% -8%, #8b5cf626 0%, transparent 62%), var(--bg)}
+:root[data-theme="light"] body{background:radial-gradient(130% 55% at 50% -8%, #8b5cf614 0%, transparent 62%), var(--bg)}
+.topbar{height:calc(66px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 14px 0;border-bottom:0;background:linear-gradient(180deg,var(--bg) 55%,transparent)}
+.crumb{font-size:15px;font-weight:800}
+.topbar-badge{display:none}
+.mobile-bottom-nav{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));border-radius:28px;border:1px solid var(--line);background:color-mix(in srgb,var(--panel) 86%,transparent);box-shadow:0 16px 48px rgba(0,0,0,.45);padding:5px 6px}
+.mobile-bottom-nav button{height:58px;border-radius:22px;font-size:9.5px}
+.mobile-bottom-nav button.selected{background:linear-gradient(140deg,#a78bfa,#7955e7);color:#fff;box-shadow:0 8px 22px #8b5cf645}
+.mobile-bottom-nav button.selected svg{color:#fff}
+.composer-wrap{padding-inline:10px}
+.composer{border-radius:28px;padding:12px 12px 10px;box-shadow:0 18px 55px rgba(0,0,0,.4)}
+.composer textarea{font-size:15px;min-height:60px}
+.send-btn{height:46px;width:46px;border-radius:17px}
+.mode-chip{padding:8px 12px;font-size:10.5px}
+.form-card,.list-card,.settings-card,.empty-card,.metric-card,.drop-zone{border-radius:24px}
+.section-page{padding:22px 0 34px}
+.content-area{padding-inline:16px}
+.hero-copy h1{font-size:27px}
+.welcome-orb.small{height:88px;width:88px;flex-basis:88px}
+.welcome-orb.small .orb-core{height:54px;width:54px;border-radius:20px}
+.welcome-wrap h1{font-size:31px}
+.welcome-orb{height:124px;width:124px}
+.welcome-orb .orb-core{height:66px;width:66px}
+.suggestion-card{padding:17px 15px;border-radius:20px}
+}

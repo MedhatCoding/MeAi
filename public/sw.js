@@ -1,4 +1,4 @@
-const CACHE_NAME = "medhat-ai-shell-v1";
+const CACHE_NAME = "medhat-ai-shell-v2";
 const APP_SHELL = ["/", "/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
