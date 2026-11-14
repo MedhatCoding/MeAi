@@ -1,7 +1,6 @@
 __pycache__/
 *.py[cod]
 .env
-.streamlit/secrets.toml
 assistant_memory.db
 .venv/
 venv/

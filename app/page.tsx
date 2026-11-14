@@ -338,6 +338,8 @@ ${data.error.name}: ${data.error.value}` : ""));
         if (last?.role === "assistant" && !last.content) return old.slice(0,-1);
         return old;
       });
+    } finally {
+      setBusy(false);
     }
   }
 
