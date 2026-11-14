@@ -116,6 +116,21 @@ hr{border-color:var(--ma-border)!important}
  [data-testid="stFileUploader"]{padding:.15rem}
 }
 
+
+/* ===== Mobile app look v2 ===== */
+[data-testid="stMain"]{background:radial-gradient(ellipse at 80% -14%,rgba(96,116,255,.22),transparent 42%),radial-gradient(ellipse at 0% 30%,rgba(56,205,220,.07),transparent 36%),#090d18!important}
+@media(max-width:700px){
+[data-testid="stRadio"]>div[role="radiogroup"]{left:12px!important;right:12px!important;bottom:calc(.7rem + env(safe-area-inset-bottom))!important;border:1px solid rgba(129,151,255,.3)!important;border-radius:26px!important;background:rgba(13,18,33,.93)!important;box-shadow:0 18px 50px rgba(0,0,0,.5)!important;padding:.5rem .45rem!important;justify-content:space-around!important;overflow:visible!important}
+[data-testid="stRadio"]>div[role="radiogroup"] label{flex:1 1 0!important;min-width:0!important;border-radius:16px!important;padding:.55rem .3rem!important;background:transparent!important}
+[data-testid="stRadio"]>div[role="radiogroup"] label:has(input:checked){background:linear-gradient(135deg,rgba(110,128,255,.35),rgba(66,205,219,.16))!important;box-shadow:0 6px 18px rgba(80,110,255,.25)}
+[data-testid="stRadio"]>div[role="radiogroup"] label p{font-size:.74rem!important}
+[data-testid="stChatInput"]{bottom:5.6rem!important;border-radius:26px!important;box-shadow:0 16px 44px rgba(0,0,0,.4)!important}
+.block-container{padding-bottom:10rem!important}
+.welcome-orb{width:84px!important;height:84px!important;font-size:2.4rem!important;border-radius:26px!important;box-shadow:0 0 60px rgba(80,130,255,.3)!important}
+.welcome-panel h1{font-size:1.7rem!important}
+.stButton>button,.stDownloadButton>button,[data-testid="stFormSubmitButton"]>button{border-radius:18px!important}
+[data-testid="stMetric"],.feature-card,.status-card{border-radius:22px!important}
+}
 </style>
 """, unsafe_allow_html=True)
 
