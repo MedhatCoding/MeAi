@@ -17,7 +17,7 @@ function isRolling24HourNewsRequest(query: string) {
   return /\b(?:last|past)\s*24\s*hours?\b|(?:اخر|خلال)\s*24\s*ساع(?:ة|ه)/i.test(normalized);
 }
 
-function isPublishedWithinLast24Hours(value: string | undefined, now: number) {
+function isPublishedWithinLast24Hours(value: string | null | undefined, now: number) {
   if (!value?.trim()) return false;
   const raw = value.trim();
   let published = Date.parse(raw);
