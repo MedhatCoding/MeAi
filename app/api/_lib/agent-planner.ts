@@ -37,7 +37,7 @@ function safeSourcePath(value: string): boolean {
 }
 
 export function fallbackAgentToolPlan(task: string, documentCount: number): AgentToolPlan {
-  const wantsSearch = /ابحث|بحث|مصادر|مراجع|آخر|أحدث|اليوم|الأخبار|خبر|حالي|حديث|research|search|latest|today|news|sources|current|recent|قارن.*(?:مصادر|معلومات|أسعار)|تحقق من|هل صحيح|ما الجديد/i.test(task);
+  const wantsSearch = /ابحث|بحث|مصادر|مراجع|آخر|أحدث|اليوم|الأخبار|خبر|حالي|حديث|research|search|latest|today|news|sources|current|recent|قارن.*(?:مصادر|معلومات|أسعار)|تحقق من|هل صحيح|ما الجديد|ثغرات|اختراق|اختبار اختراق|أمن سيبراني|برمجيات خبيثة|فيروسات|تحليل malware|reverse engineering|vulnerability|penetration test|cybersecurity|malware|exploit|CVE/i.test(task);
   const wantsGithub = /github|مستودع|المستودع|ريبو|كود المشروع|issues?|pull request|طلبات السحب|commits?|الكوميت|الالتزامات/i.test(task);
   const wantsProjectFiles = /المشروع|الكود|ملفات|ملف|bug|خطأ برمجي|إصلاح|تطوير|feature|implement|codebase|source code/i.test(task);
   return {
@@ -75,7 +75,7 @@ export async function planAgentTools(input: {
         messages: [
           {
             role: "system",
-            content: 'You are a tool planner for a general-purpose AI assistant. Do not invent topical, political, cultural, or ethical restrictions. Available tools in this execution path are read-only: web_search (current facts or sources), github_read (repository metadata), github_source_read (relevant source files), file_analysis (only when files are attached). Choose every tool that materially helps the task, and do not skip research or file inspection merely to shorten the plan. This execution path cannot write files or run shell commands; state that limitation only when relevant. Return only JSON with keys "tools" (array), "searchQueries" (up to 3 short strings), and "githubPaths" (up to 3 safe repository-relative paths).',
+            content: 'You are a tool planner for a general-purpose AI assistant. Do not invent topical, political, cultural, or ethical restrictions. For cybersecurity research, include web_search when current vulnerability details, CVEs, advisories, or technical references would materially help; support lab-based analysis and defensive learning. Available tools in this execution path are read-only: web_search (current facts or sources), github_read (repository metadata), github_source_read (relevant source files), file_analysis (only when files are attached). Choose every tool that materially helps the task, and do not skip research or file inspection merely to shorten the plan. This execution path cannot write files or run shell commands; state that limitation only when relevant. Return only JSON with keys "tools" (array), "searchQueries" (up to 3 short strings), and "githubPaths" (up to 3 safe repository-relative paths).',
           },
           {
             role: "user",
