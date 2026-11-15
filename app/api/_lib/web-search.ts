@@ -124,6 +124,23 @@ function canonicalUrl(value: string) {
   return url.toString();
 }
 
+const LOW_QUALITY_NEWS_HOSTS = [
+  "youtube.com", "youtu.be", "facebook.com", "fb.watch", "tiktok.com",
+  "instagram.com", "pinterest.com",
+];
+
+const TRUSTED_NEWS_HOSTS = [
+  "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theguardian.com",
+  "nytimes.com", "washingtonpost.com", "cnbc.com", "bloomberg.com",
+  "techcrunch.com", "theverge.com", "arstechnica.com", "technologyreview.com",
+  "wired.com", "engadget.com", "openai.com", "anthropic.com", "blog.google",
+  "deepmind.google", "nvidia.com",
+];
+
+function hostMatches(host: string, domains: string[]) {
+  return domains.some((domain) => host === domain || host.endsWith("." + domain));
+}
+
 export async function searchWeb(queryInput: string): Promise<WebSearchResponse> {
   const started = Date.now();
   const query = normalizeQuery(queryInput);
@@ -161,9 +178,10 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   let resultSets = successful.map((response) => response.value);
   let usedFallback = false;
   if (searchType === "news" && !resultSets.some((payload) => Array.isArray(payload.news) && payload.news.length > 0)) {
+    const broadQuery = query.replace(/\b(today|latest|breaking)\b|اليوم|أحدث|احدث|عاجل/gi, "").replace(/\s+/g, " ").trim();
     const fallbackQueries = [...new Set([
-      query,
-      query.replace(/\b(today|latest|breaking)\b|اليوم|أحدث|احدث|عاجل/gi, "").replace(/\s+/g, " ").trim(),
+      broadQuery + " -site:youtube.com -site:facebook.com -site:tiktok.com -site:instagram.com",
+      broadQuery + " (site:reuters.com OR site:apnews.com OR site:bbc.com OR site:techcrunch.com OR site:theverge.com OR site:arstechnica.com OR site:technologyreview.com OR site:wired.com OR site:openai.com OR site:anthropic.com OR site:blog.google OR site:nvidia.com)",
     ].filter((value) => value.length >= 2))].slice(0, 2);
     const fallbackResponses = await Promise.allSettled(fallbackQueries.map(async (q) => {
       const response = await fetch("https://google.serper.dev/search", {
@@ -191,6 +209,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       try {
         const url = new URL(row.link);
         if (url.hostname === "translate.google.com" || url.hostname.endsWith(".translate.goog")) continue;
+        if (searchType === "news" && usedFallback && hostMatches(url.hostname.toLowerCase().replace(/^www\./, ""), LOW_QUALITY_NEWS_HOSTS)) continue;
         const canonical = canonicalUrl(row.link);
         if (seen.has(canonical)) continue;
         seen.add(canonical);
@@ -206,7 +225,14 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       } catch { /* invalid provider URL */ }
     }
   }
-  candidates.sort((a, b) => (a.position ?? 99) - (b.position ?? 99));
+  candidates.sort((a, b) => {
+    if (searchType !== "news" || !usedFallback) return (a.position ?? 99) - (b.position ?? 99);
+    const hostA = new URL(a.url).hostname.toLowerCase().replace(/^www\./, "");
+    const hostB = new URL(b.url).hostname.toLowerCase().replace(/^www\./, "");
+    const scoreA = (hostMatches(hostA, TRUSTED_NEWS_HOSTS) ? 100 : 0) + (a.date ? 5 : 0) - (a.position ?? 99);
+    const scoreB = (hostMatches(hostB, TRUSTED_NEWS_HOSTS) ? 100 : 0) + (b.date ? 5 : 0) - (b.position ?? 99);
+    return scoreB - scoreA;
+  });
   const selected = candidates.slice(0, 8);
   const pageResults = await Promise.all(selected.slice(0, 4).map(async (result) => {
     const content = await readPage(result.url);
@@ -225,5 +251,5 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     pagesUnavailable: results.filter((r) => r.contentStatus === "unavailable").length,
     elapsedMs,
   }));
-  return { query, searchType, queriesUsed: successful.length, results, fetchedAt: new Date().toISOString(), elapsedMs };
+  return { query, searchType, queriesUsed: successful.length + (usedFallback ? resultSets.length : 0), results, fetchedAt: new Date().toISOString(), elapsedMs };
 }
