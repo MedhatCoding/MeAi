@@ -20,6 +20,9 @@ function isRolling24HourNewsRequest(query: string) {
 function isPublishedWithinLast24Hours(value: string | null | undefined, now: number) {
   if (!value?.trim()) return false;
   const raw = value.trim();
+  // A calendar date without a clock time cannot prove membership in a rolling
+  // 24-hour window; do not interpret midnight as an exact publication time.
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(raw) || /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s+\\d{1,2},?\\s+\\d{4}$/i.test(raw)) return false;
   let published = Date.parse(raw);
   if (!Number.isFinite(published)) {
     const relative = raw.match(/(?:^|\b)(\d+)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\s*ago\b/i);
