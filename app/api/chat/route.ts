@@ -12,6 +12,40 @@ function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
 
+function isRolling24HourNewsRequest(query: string) {
+  const normalized = query.normalize("NFKC").replace(/[أإآ]/g, "ا");
+  return /\\b(?:last|past)\\s*24\\s*hours?\\b|(?:اخر|خلال)\\s*24\\s*ساع(?:ة|ه)/i.test(normalized);
+}
+
+function isPublishedWithinLast24Hours(value: string | undefined, now: number) {
+  if (!value?.trim()) return false;
+  const raw = value.trim();
+  let published = Date.parse(raw);
+  if (!Number.isFinite(published)) {
+    const relative = raw.match(/(?:^|\\b)(\\d+)\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\\s*ago\\b/i);
+    if (relative) {
+      const amount = Number(relative[1]);
+      const unit = relative[2].toLowerCase();
+      const factor = unit.startsWith("sec") ? 1_000 : unit.startsWith("min") ? 60_000 :
+        unit.startsWith("hour") || unit.startsWith("hr") ? 3_600_000 :
+        unit.startsWith("week") ? 604_800_000 : 86_400_000;
+      published = now - amount * factor;
+    } else {
+      const arabicRelative = raw.match(/منذ\\s*(\\d+)\\s*(ثانية|ثوانٍ|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع)/);
+      if (arabicRelative) {
+        const amount = Number(arabicRelative[1]);
+        const unit = arabicRelative[2];
+        const factor = /ثانية|ثوانٍ/.test(unit) ? 1_000 : /دقيقة|دقائق/.test(unit) ? 60_000 :
+          /ساعة|ساعات/.test(unit) ? 3_600_000 : /أسبوع/.test(unit) ? 604_800_000 : 86_400_000;
+        published = now - amount * factor;
+      } else if (/^(just now|now|الآن|منذ قليل)$/i.test(raw)) {
+        published = now;
+      }
+    }
+  }
+  return Number.isFinite(published) && published <= now && published >= now - 24 * 60 * 60_000;
+}
+
 export async function POST(request: NextRequest) {
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
@@ -79,8 +113,21 @@ export async function POST(request: NextRequest) {
       const search = await searchWeb(latestUser);
       systemMessage.content += "\n\nقواعد البحث الحي الإضافية: استخدم حتى 8 نتائج فقط بعد تقييم صلتها بالسؤال، ولا تملأ العدد بنتائج ضعيفة. امنح الأولوية لتطابق الموضوع وحداثة تاريخ النشر عندما يطلب المستخدم معلومات حديثة. نتائج مزودي البحث قد تتكرر؛ تعامل مع كل خبر أو صفحة مكررة كعنصر واحد، واستفد من اختلاف المصادر لإثراء التحقق لا لتكرار العنوان. لكل نتيجة رقم مرجعي ثابت [1]، [2]... حسب ترتيب الأدلة أدناه. يجب أن يظهر في الإجابة رابط مباشر قابل للفتح لكل خبر، وأن يتطابق رقم الاستشهاد مع المصدر الصحيح. في طلبات «اليوم» و«آخر 24 ساعة»، النتائج التي تصل إليك تكون قد اجتازت فلترة زمنية صارمة في الخادم؛ لا تضف إليها أخبارًا من الذاكرة أو من خارج النتائج، ولا توسّع النطاق الزمني. إذا لم تصل أي نتائج مؤرخة داخل النطاق، قل بوضوح: «لم أعثر على أخبار بتاريخ موثّق داخل الفترة المطلوبة»، ولا تعرض الأخبار القديمة على أنها حديثة ولا تملأ العدد بأخبار غير مؤرخة. لا تستنتج حداثة الخبر من ترتيب النتيجة أو من تاريخ اليوم وحده. لا تحوّل وصف محرك البحث لنوع المصدر إلى ضمان للمصداقية؛ قيّم ما يقدمه المصدر ووضّح طبيعته. إذا لم يكن هناك دليل كافٍ على الادعاء، قل ذلك صراحة.";
 
-      searchResults = search.results;
-      const evidence = search.results.map((result, index) => {
+      const strict24h = isRolling24HourNewsRequest(latestUser);
+      const searchNow = Date.now();
+      const eligibleResults = strict24h
+        ? search.results.filter((result) => isPublishedWithinLast24Hours(result.date, searchNow))
+        : search.results;
+      if (strict24h && eligibleResults.length !== search.results.length) {
+        console.info("[meai-chat-search]", JSON.stringify({
+          event: "chat_temporal_guard",
+          requestedWindow: "last_24_hours",
+          candidatesBeforeGuard: search.results.length,
+          candidatesAfterGuard: eligibleResults.length,
+        }));
+      }
+      searchResults = eligibleResults;
+      const evidence = eligibleResults.map((result, index) => {
         const pageText = result.content ? "\nالنص المستخرج من الصفحة (محدود):\n" + result.content.slice(0, 4500) : "";
         return "[" + (index + 1) + "] العنوان الأصلي: " + result.title +
           "\nالمصدر: " + result.source +
