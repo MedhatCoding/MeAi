@@ -34,7 +34,6 @@ export async function GET(request: NextRequest) {
       // The general-purpose agent can perform model-backed work and bounded read-only integrations; it is not a shell/code sandbox.
       agentExecution: Boolean(provider),
       agentSandbox: Boolean(process.env.E2B_API_KEY),
-      agentSandbox: Boolean(process.env.E2B_API_KEY),
       imageGeneration: cloudflare,
       videoGeneration: false,
       webSearch: searchProviders.length > 0,
