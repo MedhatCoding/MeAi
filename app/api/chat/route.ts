@@ -76,6 +76,9 @@ export async function POST(request: NextRequest) {
   if (wantsWeb) {
     try {
       const search = await searchWeb(latestUser);
+      if (search.searchType === "news") {
+        systemMessage.content += "\n\nقواعد إضافية لتقارير الأخبار: اعرض حتى 5 أخبار فقط، واختر الأكثر صلة وحداثة. لكل خبر اذكر العنوان، اسم الناشر، تاريخ النشر كما ورد حرفيًا أو (غير متاح)، والرابط المباشر كما ورد في نتائج البحث. لا تقدّم فيديوهات أو منشورات شبكات اجتماعية كأنها أخبار صحفية، ولا تصف نتيجة بأنها خبر اليوم إذا لم يثبت تاريخها. إذا كانت النتائج ضعيفة الصلة، قل ذلك بدل حشو القائمة.";
+      }
       searchResults = search.results;
       const evidence = search.results.map((result, index) => {
         const pageText = result.content ? "\nالنص المستخرج من الصفحة (محدود):\n" + result.content.slice(0, 4500) : "";
