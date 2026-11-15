@@ -118,6 +118,17 @@ function extractPublishedDate(html: string): string | null {
   for (const match of html.matchAll(/["']datePublished["']\s*:\s*["']([^"']+)["']/gi)) {
     if (match[1] && Number.isFinite(Date.parse(match[1]))) return new Date(match[1]).toISOString();
   }
+  // Some publishers omit structured publication metadata. In that case,
+  // inspect only the opening article text (near the headline), not arbitrary
+  // dates mentioned later in the body, to avoid mistaking an old article for
+  // a fresh one based on a date elsewhere on the page.
+  const openingText = htmlToText(html).slice(0, 1800);
+  const visibleDate = openingText.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/i)
+    || openingText.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/i);
+  if (visibleDate) {
+    const parsed = Date.parse(visibleDate[0]);
+    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+  }
   return null;
 }
 
