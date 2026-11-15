@@ -4,7 +4,7 @@ import { Bot, Brain, FolderOpen, Image as ImageIcon, Layers3, MessageCircle, Sea
 
 export type Section = "chat" | "research" | "agent" | "tasks" | "workspace" | "images" | "video" | "memory" | "settings";
 export type Message = { role: "user" | "assistant"; content: string; time: string; sources?: ResearchResult[]; image?: string; tools?: string[]; trace?: AgentTraceItem[] };
-export type ResearchResult = { title: string; url: string; snippet: string; date: string | null; position: number | null; source?: string; sourceType?: "publisher" | "official" | "social" | "other"; contentStatus?: "read" | "snippet_only" | "unavailable"; content?: string };
+export type ResearchResult = { title: string; url: string; snippet: string; date: string | null; position: number | null; source?: string; sourceType?: "publisher" | "official" | "social" | "other"; provider?: "serper" | "brave" | "tavily"; contentStatus?: "read" | "snippet_only" | "unavailable"; content?: string };
 export type TaskItem = { title: string; done: boolean };
 export type WorkspaceDocument = { name: string; content: string; size: number; updatedAt: string };
 export type AgentArtifact = { filename: string; content: string; summary: string; createdAt: string };
