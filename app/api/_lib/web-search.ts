@@ -427,22 +427,23 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       candidates.push(normalized);
     });
   }
-  // Resolve missing publication dates from publisher metadata before strict
-  // filtering; search snippets frequently omit dates that the article page exposes.
+  // Strict news windows must be verified against the publisher page even when
+  // a search provider supplies a precise timestamp. Provider timestamps can be
+  // crawl/index dates and must never override the article's actual publication date.
   const pageMetadata = new Map<string, { text: string; publishedAt: string | null }>();
   let dateEnrichedCandidates = candidates;
   if (newsWindow) {
-    const needsMetadata = candidates.filter((result) => !result.date || /^\d{4}-\d{2}-\d{2}$/.test(result.date.trim()) || /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}$/i.test(result.date.trim())).slice(0, 12);
-    const metadataRows = await Promise.all(needsMetadata.map(async (result) => {
+    const verificationCandidates = candidates.slice(0, 12);
+    const metadataRows = await Promise.all(verificationCandidates.map(async (result) => {
       const page = await readPage(result.url);
       if (page) pageMetadata.set(canonicalUrl(result.url), page);
       return { result, publishedAt: page?.publishedAt || null };
     }));
-    const metadataByUrl = new Map(metadataRows.map(({ result, publishedAt }) => [canonicalUrl(result.url), publishedAt]));
-    dateEnrichedCandidates = candidates.map((result) => ({
-      ...result,
-      date: metadataByUrl.get(canonicalUrl(result.url)) || result.date || null,
-    }));
+    // Missing publisher dates and unreadable pages are excluded for strict
+    // "today"/"last 24 hours" requests; never fall back to provider timestamps.
+    dateEnrichedCandidates = metadataRows.flatMap(({ result, publishedAt }) =>
+      publishedAt ? [{ ...result, date: publishedAt }] : []
+    );
   }
 
   // For explicit "today"/"last 24 hours" news requests, require a parseable
