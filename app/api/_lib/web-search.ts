@@ -100,7 +100,23 @@ function htmlToText(html: string) {
   return decodeHtml(text).replace(/[\t\r ]+/g, " ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, 12000);
 }
 
-async function readPage(url: string): Promise<string | null> {
+function extractPublishedDate(html: string): string | null {
+  const patterns = [
+    /<meta[^>]+(?:property|name)\s*=\s*["'](?:article:published_time|og:published_time|datePublished|publishdate|pubdate|date)\s*["'][^>]+content\s*=\s*["']([^"']+)["']/i,
+    /<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+(?:property|name)\s*=\s*["'](?:article:published_time|og:published_time|datePublished|publishdate|pubdate|date)\s*["']/i,
+    /<time[^>]+datetime\s*=\s*["']([^"']+)["']/i,
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match?.[1] && Number.isFinite(Date.parse(match[1]))) return new Date(match[1]).toISOString();
+  }
+  for (const match of html.matchAll(/["']datePublished["']\s*:\s*["']([^"']+)["']/gi)) {
+    if (match[1] && Number.isFinite(Date.parse(match[1]))) return new Date(match[1]).toISOString();
+  }
+  return null;
+}
+
+async function readPage(url: string): Promise<{ text: string; publishedAt: string | null } | null> {
   if (!isPublicHttpUrl(url)) return null;
   try {
     const response = await fetch(url, {
@@ -126,8 +142,10 @@ async function readPage(url: string): Promise<string | null> {
       if (bytes >= 2_000_000) break;
     }
     try { await reader.cancel(); } catch { /* response already closed */ }
-    const extracted = /html|xhtml/i.test(contentType) ? htmlToText(raw) : raw.replace(/\s+/g, " ").trim().slice(0, 12000);
-    return extracted.length >= 180 ? extracted : null;
+    const isHtml = /html|xhtml/i.test(contentType);
+    const publishedAt = isHtml ? extractPublishedDate(raw) : null;
+    const extracted = isHtml ? htmlToText(raw) : raw.replace(/\s+/g, " ").trim().slice(0, 12000);
+    return extracted.length >= 180 ? { text: extracted, publishedAt } : (publishedAt ? { text: "", publishedAt } : null);
   } catch {
     return null;
   }
@@ -393,6 +411,24 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       candidates.push(normalized);
     });
   }
+  // Resolve missing publication dates from publisher metadata before strict
+  // filtering; search snippets frequently omit dates that the article page exposes.
+  const pageMetadata = new Map<string, { text: string; publishedAt: string | null }>();
+  let dateEnrichedCandidates = candidates;
+  if (newsWindow) {
+    const needsMetadata = candidates.filter((result) => !result.date).slice(0, 12);
+    const metadataRows = await Promise.all(needsMetadata.map(async (result) => {
+      const page = await readPage(result.url);
+      if (page) pageMetadata.set(canonicalUrl(result.url), page);
+      return { result, publishedAt: page?.publishedAt || null };
+    }));
+    const metadataByUrl = new Map(metadataRows.map(({ result, publishedAt }) => [canonicalUrl(result.url), publishedAt]));
+    dateEnrichedCandidates = candidates.map((result) => ({
+      ...result,
+      date: result.date || metadataByUrl.get(canonicalUrl(result.url)) || null,
+    }));
+  }
+
   // For explicit "today"/"last 24 hours" news requests, require a parseable
   // publication timestamp inside the requested window. Missing/ambiguous dates
   // are excluded rather than being presented as current news.
@@ -402,7 +438,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(now);
   const datedCandidates = newsWindow
-    ? candidates.flatMap((result) => {
+    ? dateEnrichedCandidates.flatMap((result) => {
         const rawDate = result.date || "";
         const publishedAt = parsePublishedDate(rawDate, now);
         // Date-only publisher metadata can verify "today" as a calendar day,
@@ -433,8 +469,10 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   }
   const selected = datedCandidates.slice(0, 12);
   const pageResults = await Promise.all(selected.filter((result) => !result.content).slice(0, 6).map(async (result) => {
-    const content = await readPage(result.url);
-    return content ? { ...result, content, contentStatus: "read" as const } : { ...result, contentStatus: "unavailable" as const };
+    const page = pageMetadata.get(canonicalUrl(result.url)) || await readPage(result.url);
+    return page?.text
+      ? { ...result, content: page.text, contentStatus: "read" as const }
+      : { ...result, contentStatus: "unavailable" as const };
   }));
   const byUrl = new Map(pageResults.map((result) => [canonicalUrl(result.url), result]));
   const results = selected.map((result) => byUrl.get(canonicalUrl(result.url)) || result);
@@ -449,6 +487,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     temporalFilter: newsWindow ? "strict" : "none",
     candidatesBeforeTemporalFilter: candidates.length,
     candidatesAfterTemporalFilter: datedCandidates.length,
+    datesRecoveredFromPublisherMetadata: dateEnrichedCandidates.filter((result, index) => !candidates[index]?.date && !!result.date).length,
     pagesRead: results.filter((result) => result.contentStatus === "read").length,
     pagesUnavailable: results.filter((result) => result.contentStatus === "unavailable").length,
     elapsedMs,
