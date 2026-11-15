@@ -1,6 +1,7 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
 import { enforceApiAccess } from "../../_lib/api-access";
 import { planAgentTools } from "../../_lib/agent-planner";
+import { searchWeb } from "../../_lib/web-search";
 import { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -69,51 +70,33 @@ export async function POST(request: NextRequest) {
   let searchUsed = false;
   let searchSources: { title: string; url: string; date?: string }[] = [];
   const toolTrace: { tool: string; status: "success" | "unavailable" | "failed" | "skipped"; detail: string }[] = [];
-  if (wantsSearch && process.env.SERPER_API_KEY) {
+  if (wantsSearch) {
     try {
-      // Split multi-part requests into a small number of focused queries instead of sending
-      // the whole prompt once. Keep the original query first and cap external calls.
-      const clauses = task
-        .split(/(?:\n+|[؛;؟?]+|\s+و(?:كمان|أيضًا)\s+|\s+بالإضافة إلى\s+)/i)
-        .map((part) => part.trim().replace(/\s+/g, " "))
-        .filter((part) => part.length >= 12 && part.length <= 300);
-      const queries = [...new Set([...agentPlan.searchQueries, task.replace(/\s+/g, " ").slice(0, 300), ...clauses])].slice(0, 3);
-      const responses = await Promise.all(queries.map(async (q) => {
-        try {
-          const r = await fetch("https://google.serper.dev/search", {
-            method: "POST",
-            headers: { "X-API-KEY": process.env.SERPER_API_KEY!, "Content-Type": "application/json" },
-            body: JSON.stringify({ q, gl: "eg", hl: "ar", num: 5 }),
-            cache: "no-store",
-            signal: AbortSignal.timeout(9000),
-          });
-          if (!r.ok) return [];
-          const data = await r.json() as { organic?: { title?: unknown; link?: unknown; snippet?: unknown; date?: unknown }[] };
-          return (Array.isArray(data.organic) ? data.organic : []).flatMap((item) => {
-            if (typeof item.title !== "string" || typeof item.link !== "string") return [];
-            try {
-              const u = new URL(item.link);
-              if (!["http:", "https:"].includes(u.protocol)) return [];
-              return [{ title: item.title.slice(0, 250), url: u.toString(), date: typeof item.date === "string" ? item.date.slice(0, 80) : undefined, text: `- ${item.title.slice(0, 250)}\n  ${typeof item.snippet === "string" ? item.snippet.slice(0, 700) : ""}\n  ${typeof item.date === "string" ? "التاريخ: " + item.date.slice(0, 80) + "\n  " : ""}${u.toString()}` }];
-            } catch { return []; }
-          });
-        } catch { return []; }
-      }));
+      // Reuse the same multi-provider research pipeline as chat and the research workspace.
+      const queries = [...new Set([...agentPlan.searchQueries, task.replace(/\s+/g, " ").slice(0, 1000)])].filter((query) => query.trim().length >= 2).slice(0, 2);
+      const batches = await Promise.allSettled(queries.map((query) => searchWeb(query)));
       const seen = new Set<string>();
-      const uniqueResults = responses.flat().filter((item) => {
-        if (seen.has(item.url)) return false;
-        seen.add(item.url);
-        return true;
-      }).slice(0, 10);
+      const uniqueResults = batches.flatMap((batch) => batch.status === "fulfilled" ? batch.value.results : [])
+        .filter((item) => {
+          try {
+            const url = new URL(item.url);
+            url.hash = "";
+            const canonical = url.toString();
+            if (seen.has(canonical)) return false;
+            seen.add(canonical);
+            return true;
+          } catch { return false; }
+        }).slice(0, 12);
       searchSources = uniqueResults.map(({ title, url, date }) => ({ title, url, ...(date ? { date } : {}) }));
-      evidence = uniqueResults.map((item) => item.text).join("\n\n");
+      evidence = uniqueResults.map((item) => `- ${item.title}\n  المصدر: ${item.source}؛ نوعه: ${item.sourceType}؛ محرك البحث: ${item.provider}\n  ${item.snippet}\n  ${item.date ? "التاريخ: " + item.date + "\n  " : ""}${item.content ? "النص المستخرج: " + item.content.slice(0, 2500) + "\n  " : ""}${item.url}`).join("\n\n");
       searchUsed = Boolean(evidence);
-      toolTrace.push({ tool: "web_search", status: searchUsed ? "success" : "failed", detail: searchUsed ? `تم جمع ${searchSources.length} نتيجة فريدة من البحث.` : "البحث لم يُرجع نتائج قابلة للاستخدام." });
-    } catch { toolTrace.push({ tool: "web_search", status: "failed", detail: "تعذر إكمال البحث؛ سيُذكر القيد في الإجابة." }); }
-  } else if (wantsSearch) {
-    toolTrace.push({ tool: "web_search", status: "unavailable", detail: "مفتاح SERPER_API_KEY غير مضبوط على الخادم." });
+      const usedProviders = [...new Set(uniqueResults.map((item) => item.provider))];
+      toolTrace.push({ tool: "web_search", status: searchUsed ? "success" : "failed", detail: searchUsed ? `تم جمع ${searchSources.length} نتيجة من ${usedProviders.join(" و") || "محرك البحث"}.` : "محركات البحث المهيأة لم تُرجع نتائج قابلة للاستخدام." });
+    } catch (error) {
+      toolTrace.push({ tool: "web_search", status: "unavailable", detail: error instanceof Error ? error.message.slice(0, 220) : "تعذر الاتصال بمزوّدي البحث." });
+    }
   } else {
-    toolTrace.push({ tool: "web_search", status: "skipped", detail: "المهمة لا تتطلب بحثًا حديثًا بحسب تصنيف الطلب." });
+    toolTrace.push({ tool: "web_search", status: "skipped", detail: "لم يطلب مخطط المهمة بحثًا خارجيًا." });
   }
 
   let githubContext = "";
