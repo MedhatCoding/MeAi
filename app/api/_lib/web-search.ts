@@ -54,7 +54,7 @@ function normalizeQuery(query: string) {
 }
 
 function classify(query: string): "news" | "web" | "academic" {
-  if (/\b(news|headlines|breaking)\b|أخبار|الأخبار|خبر|عاجل|آخر التطورات|مستجدات/i.test(query)) return "news";
+  if (/\b(news|headlines|breaking)\b|أخبار|الأخبار|خبر|عاجل|آخر التطورات|مستجدات|أحدث\s+(?:أخبار|تطورات)|خلال\s+24\s+ساعة/i.test(query)) return "news";
   if (/\b(paper|papers|academic|scholar|research paper|journal|study|studies)\b|أبحاث علمية|بحث علمي|أوراق علمية|دراسات أكاديمية|دراسة علمية/i.test(query)) return "academic";
   return "web";
 }
@@ -421,7 +421,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   const pageMetadata = new Map<string, { text: string; publishedAt: string | null }>();
   let dateEnrichedCandidates = candidates;
   if (newsWindow) {
-    const needsMetadata = candidates.filter((result) => !result.date).slice(0, 12);
+    const needsMetadata = candidates.filter((result) => !result.date || /^\d{4}-\d{2}-\d{2}$/.test(result.date.trim()) || /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}$/i.test(result.date.trim())).slice(0, 12);
     const metadataRows = await Promise.all(needsMetadata.map(async (result) => {
       const page = await readPage(result.url);
       if (page) pageMetadata.set(canonicalUrl(result.url), page);
@@ -430,7 +430,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     const metadataByUrl = new Map(metadataRows.map(({ result, publishedAt }) => [canonicalUrl(result.url), publishedAt]));
     dateEnrichedCandidates = candidates.map((result) => ({
       ...result,
-      date: result.date || metadataByUrl.get(canonicalUrl(result.url)) || null,
+      date: metadataByUrl.get(canonicalUrl(result.url)) || result.date || null,
     }));
   }
 
