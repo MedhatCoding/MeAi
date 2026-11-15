@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       agentPlanning: Boolean(provider),
       // The general-purpose agent can perform model-backed work and bounded read-only integrations; it is not a shell/code sandbox.
       agentExecution: Boolean(provider),
+      agentSandbox: Boolean(process.env.E2B_API_KEY),
       imageGeneration: cloudflare,
       videoGeneration: false,
       webSearch: searchProviders.length > 0,
@@ -49,7 +50,8 @@ export async function GET(request: NextRequest) {
       chat: provider ? "configured_not_live_tested" : "missing_provider",
       webSearch: searchProviders.length > 0 ? "configured_not_live_tested" : "missing_search_provider_key",
       webSearchProviders: searchProviders,
-      codeExecution: process.env.E2B_API_KEY ? "sandbox_provider_configured_not_live_tested" : "missing_e2b_api_key",
+      codeExecution: process.env.E2B_API_KEY ? "e2b_python_sandbox_configured_not_live_tested" : "missing_e2b_api_key",
+      agentSandbox: process.env.E2B_API_KEY ? "python_execution_route_available_not_live_tested" : "missing_e2b_api_key",
       github: githubConfigured ? "token_configured_identity_and_repository_access_must_be_checked" : "missing_token",
       githubSourceEditing: process.env.MEAI_AGENT_EDIT_ENABLED === "true" && githubConfigured ? "explicitly_enabled" : "disabled_by_default",
       cloudMemory: supabaseConfigured ? "project_configured_auth_and_rls_unverified" : "missing_supabase_config",
