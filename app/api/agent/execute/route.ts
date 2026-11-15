@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
           stream: false,
           messages: [
             { role: "system", content: "You are a strict completion reviewer. Check whether the draft directly fulfils the user's request, covers every requested part, uses supplied evidence correctly, and avoids claiming actions that were not confirmed. If it is complete, return it unchanged. If incomplete, produce a corrected complete answer. Do not invent tool results, citations, or capabilities. Answer in the same language as the draft." },
-            { role: "user", content: `Original task:\n${task}\n\nAvailable evidence:\n${githubContext.slice(0, 12000)}\n${evidence.slice(0, 12000)}\n\nDraft answer to review:\n${finalAnswer}` }
+            { role: "user", content: `Original task:\n${task}\n\nAvailable evidence:\n${githubContext.slice(0, 12000)}\n${evidence.slice(0, 12000)}\\n${codeExecutionContext.slice(0, 12000)}\n\nDraft answer to review:\n${finalAnswer}` }
           ]
         }),
         cache: "no-store",
