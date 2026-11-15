@@ -1,4 +1,4 @@
-export type AgentToolName = "web_search" | "github_read" | "github_source_read" | "file_analysis";
+export type AgentToolName = "web_search" | "github_read" | "github_source_read" | "file_analysis" | "code_execution";
 
 export type AgentToolPlan = {
   tools: AgentToolName[];
@@ -12,6 +12,7 @@ const allowedTools = new Set<AgentToolName>([
   "github_read",
   "github_source_read",
   "file_analysis",
+  "code_execution",
 ]);
 
 function parseJsonObject(value: string): Record<string, unknown> | null {
@@ -46,6 +47,7 @@ export function fallbackAgentToolPlan(task: string, documentCount: number): Agen
       ...(wantsGithub ? ["github_read" as const] : []),
       ...(wantsGithub && wantsProjectFiles ? ["github_source_read" as const] : []),
       ...(documentCount > 0 ? ["file_analysis" as const] : []),
+      ...(/شغّل|شغل|نفّذ الكود|نفذ الكود|اختبر الكود|شغّل الكود|احسب باستخدام كود|اكتب سكربت|run (?:the )?code|execute (?:the )?code|run (?:a )?script|test (?:the )?code|python script|calculate with python/i.test(task) ? ["code_execution" as const] : []),
     ],
     searchQueries: [task.replace(/\s+/g, " ").slice(0, 300)],
     githubPaths: [],
@@ -75,7 +77,7 @@ export async function planAgentTools(input: {
         messages: [
           {
             role: "system",
-            content: 'You are a tool planner for a general-purpose AI assistant. Do not invent topical, political, cultural, or ethical restrictions. For cybersecurity research, include web_search when current vulnerability details, CVEs, advisories, or technical references would materially help; support lab-based analysis and defensive learning. Available tools in this execution path are read-only: web_search (current facts or sources), github_read (repository metadata), github_source_read (relevant source files), file_analysis (only when files are attached). Choose every tool that materially helps the task, and do not skip research or file inspection merely to shorten the plan. This execution path cannot write files or run shell commands; state that limitation only when relevant. Return only JSON with keys "tools" (array), "searchQueries" (up to 3 short strings), and "githubPaths" (up to 3 safe repository-relative paths).',
+            content: 'You are a tool planner for a general-purpose AI assistant. Do not invent topical, political, cultural, or ethical restrictions. For cybersecurity research, include web_search when current vulnerability details, CVEs, advisories, or technical references would materially help; support lab-based analysis and defensive learning. Available tools: web_search (current facts or sources), github_read (repository metadata), github_source_read (relevant source files), file_analysis (only when files are attached), and code_execution (generate and run a short Python script in an ephemeral E2B sandbox with outbound internet disabled; use only when executing code materially helps solve or verify the user's task, or the user explicitly asks to run/test code). Do not select code_execution merely to appear active. Never put secrets or user credentials in generated code. Choose every tool that materially helps the task, and do not skip research or file inspection merely to shorten the plan. Return only JSON with keys "tools" (array), "searchQueries" (up to 3 short strings), and "githubPaths" (up to 3 safe repository-relative paths).',
           },
           {
             role: "user",
