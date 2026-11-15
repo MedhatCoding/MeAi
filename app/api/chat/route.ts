@@ -59,7 +59,7 @@ function isPublishedWithinLast24Hours(value: string | null | undefined, now: num
   const raw = value.trim();
   // A calendar date without a clock time cannot prove membership in a rolling
   // 24-hour window; do not interpret midnight as an exact publication time.
-  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(raw) || /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s+\\d{1,2},?\\s+\\d{4}$/i.test(raw)) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw) || /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}$/i.test(raw)) return false;
   let published = Date.parse(raw);
   if (!Number.isFinite(published)) {
     const relative = raw.match(/(?:^|\b)(\d+)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\s*ago\b/i);
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
       const audit=await verifyEvidence(modelConfig,latestUser,evidence,request.signal);
       console.info("[meai-orchestrator]",JSON.stringify({event:"evidence_audit",resultCount:eligibleResults.length,readablePages:eligibleResults.filter((x)=>x.contentStatus==="read").length}));
       groundedMessages=groundedMessages.map((message,index)=>index===groundedMessages.length-1
-        ? {...message,content:message.content+"\n\n[خطة الطلب: "+requestPlan.intent+". سبب البحث: "+requestPlan.reason+".]\\n[أدلة بحث فعلية؛ لا تضف حقائق غير مدعومة.]\n"+evidence+"\n\n[تدقيق الأدلة المستقل؛ استخدمه لكشف التعارضات والحدود ولا تعرضه حرفيًا]:\n"+audit}
+        ? {...message,content:message.content+"\n\n[خطة الطلب: "+requestPlan.intent+". سبب البحث: "+requestPlan.reason+".]\n[أدلة بحث فعلية؛ لا تضف حقائق غير مدعومة.]\n"+evidence+"\n\n[تدقيق الأدلة المستقل؛ استخدمه لكشف التعارضات والحدود ولا تعرضه حرفيًا]:\n"+audit}
         :message);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "تعذر البحث.";
