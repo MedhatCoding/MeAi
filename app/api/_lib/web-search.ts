@@ -5,7 +5,7 @@ export type WebSearchResult = {
   date: string | null;
   source: string;
   sourceType: "publisher" | "official" | "social" | "other";
-  provider: "serper" | "brave" | "tavily" | "endless";
+  provider: "serper" | "brave" | "tavily" | "endless" | "langsearch";
   position: number | null;
   content?: string;
   contentStatus: "read" | "snippet_only" | "unavailable";
@@ -34,6 +34,9 @@ type RawResult = {
   published?: unknown;
   published_date?: unknown;
   publishedDate?: unknown;
+  datePublished?: unknown;
+  name?: unknown;
+  text?: unknown;
   source?: unknown;
   position?: unknown;
 };
@@ -241,16 +244,36 @@ async function endlessSearch(query: string, type: "news" | "web" | "academic", k
   return { provider: "endless", rows: toRows(data.results) };
 }
 
+async function langsearchSearch(query: string, key: string): Promise<ProviderBatch> {
+  const response = await fetch("https://api.langsearch.com/v1/web-search", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+    body: JSON.stringify({ query, count: 10, contents: { text: { max_characters: 5000 } } }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!response.ok) throw new Error("LangSearch HTTP " + response.status);
+  const payload = await response.json() as {
+    code?: unknown;
+    message?: unknown;
+    data?: { webPages?: { value?: unknown } };
+  };
+  if (String(payload.code) !== "200") {
+    throw new Error("LangSearch API: " + (typeof payload.message === "string" ? payload.message : "unexpected response"));
+  }
+  return { provider: "langsearch", rows: toRows(payload.data?.webPages?.value) };
+}
+
 function normalizeRow(row: RawResult, provider: WebSearchResult["provider"], position: number): WebSearchResult | null {
-  const title = typeof row.title === "string" ? row.title.trim() : "";
+  const title = typeof row.title === "string" ? row.title.trim() : typeof row.name === "string" ? row.name.trim() : "";
   const link = typeof row.url === "string" ? row.url : typeof row.link === "string" ? row.link : "";
   if (!title || !link || !isPublicHttpUrl(link)) return null;
   try {
     const url = new URL(link);
     if (url.hostname === "translate.google.com" || url.hostname.endsWith(".translate.goog")) return null;
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
-    const date = [row.date, row.published_date, row.publishedDate, row.published, row.page_age].find((value) => typeof value === "string" && value.trim());
-    const snippet = [row.snippet, row.description, row.content].find((value) => typeof value === "string" && value.trim());
+    const date = [row.date, row.datePublished, row.published_date, row.publishedDate, row.published, row.page_age].find((value) => typeof value === "string" && value.trim());
+    const snippet = [row.snippet, row.description, row.content, row.text].find((value) => typeof value === "string" && value.trim());
     const rawContent = typeof row.raw_content === "string" && row.raw_content.length > 180 ? row.raw_content.slice(0, 12000) : undefined;
     return {
       title: title.slice(0, 300),
@@ -278,12 +301,14 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     brave: process.env.BRAVE_SEARCH_API_KEY,
     tavily: process.env.TAVILY_API_KEY,
     endless: process.env.ENDLESS_SEARCH_KEY,
+    langsearch: process.env.LANGSEARCH_API_KEY,
   };
   const providers = [
     ...(keys.serper ? [{ name: "serper" as const, key: keys.serper }] : []),
     ...(keys.brave ? [{ name: "brave" as const, key: keys.brave }] : []),
     ...(keys.tavily ? [{ name: "tavily" as const, key: keys.tavily }] : []),
     ...(keys.endless ? [{ name: "endless" as const, key: keys.endless }] : []),
+    ...(keys.langsearch ? [{ name: "langsearch" as const, key: keys.langsearch }] : []),
   ];
   if (!providers.length) throw new Error("البحث غير مهيأ. أضف مفتاح مزوّد بحث واحد على الأقل إلى أسرار الاستضافة.");
   const searchType = classify(query);
@@ -292,7 +317,8 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     if (provider.name === "serper") return serperSearch(variant, searchType, provider.key);
     if (provider.name === "brave") return braveSearch(variant, provider.key);
     if (provider.name === "tavily") return tavilySearch(variant, searchType, provider.key);
-    return endlessSearch(variant, searchType, provider.key);
+    if (provider.name === "endless") return endlessSearch(variant, searchType, provider.key);
+    return langsearchSearch(variant, provider.key);
   }));
   const settled = await Promise.allSettled(tasks);
   const batches = settled.flatMap((item) => item.status === "fulfilled" ? [item.value] : []);
