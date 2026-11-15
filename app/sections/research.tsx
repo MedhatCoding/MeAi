@@ -18,7 +18,7 @@ interface ResearchSectionProps {
   researchData: ResearchResult[];
   busy: boolean;
   setSection: (id: Section) => void;
-  sendMessage: (value?: string) => void | Promise<void>;
+  sendMessage: (value?: string, sources?: ResearchResult[], skipWebSearch?: boolean) => void | Promise<void>;
   runResearch: () => Promise<void>;
 }
 
@@ -33,10 +33,10 @@ export default function ResearchSection({
   runResearch,
 }: ResearchSectionProps) {
   const analyze = () => {
-    const evidence = researchData.map((r,i)=> (i+1) + ". " + r.title + "\n" + (r.date ? "التاريخ: " + r.date + "\n" : "") + (r.snippet || "") + "\nالمصدر: " + r.url).join("\n\n");
-    const message = "حلّل نتائج البحث التالية للإجابة عن سؤالي: " + researchQuery + "\n\nاكتب خلاصة واضحة، أهم النقاط، ما يتفق وما يختلف بين المصادر، وما لا يمكن الجزم به. اربط كل معلومة بمصدرها ورابطها، وميّز بين تاريخ النشر وتاريخ الحدث. لا تضف حقائق غير مدعومة بالمقتطفات، واذكر أن التحليل أولي لأن المحتوى الكامل للصفحات لم يُقرأ.\n\n" + evidence;
+    const evidence = researchData.map((r,i)=> (i+1) + ". " + r.title + "\nالمصدر: " + (r.source || r.url) + "\nتاريخ النشر كما أورده محرك البحث: " + (r.date || "غير متاح") + "\nمقتطف البحث: " + (r.snippet || "غير متاح") + "\nحالة قراءة الصفحة: " + (r.contentStatus === "read" ? "تم استخراج نص الصفحة" : "لم يتوفر نص الصفحة") + (r.content ? "\nالنص المستخرج: " + r.content.slice(0,4500) : "") + "\nالرابط الأصلي: " + r.url).join("\n\n");
+    const message = "حلّل نتائج البحث التالية للإجابة عن سؤالي: " + researchQuery + "\n\nاكتب خلاصة واضحة، أهم النقاط، ما يتفق وما يختلف بين المصادر، وما لا يمكن الجزم به. اربط كل معلومة بمصدرها ورابطها، وميّز بين تاريخ النشر وتاريخ الحدث. لا تضف حقائق غير مدعومة بالمقتطفات، واعتمد على النص المستخرج عند توفره، واذكر بوضوح أي نتائج لم يتوفر نص صفحاتها.\n\n" + evidence;
     setSection("chat");
-    void sendMessage(message);
+    void sendMessage(message, researchData, true);
   };
   return (
     <div className="section-page">
@@ -61,7 +61,7 @@ export default function ResearchSection({
       </div>
       {researchData.length>0 ? <div className="list-card">
         <div className="list-header"><h3>النتائج <span className="pill purple-pill">{researchData.length}</span></h3><button className="primary-btn" type="button" disabled={busy} onClick={analyze}><Sparkles size={15}/> حلّل النتائج بالمساعد</button></div>
-        <div className="sources-grid">{researchData.map((r,i)=><a className="source-card" key={r.url+i} href={r.url} target="_blank" rel="noopener noreferrer"><b>{r.title}</b><p>{r.snippet||"لا يوجد وصف متاح."}</p><span className="source-host"><ExternalLink size={11}/>{(()=>{try{return new URL(r.url).hostname}catch{return r.url}})()}{r.date?" • "+r.date:""}</span></a>)}</div>
+        <div className="sources-grid">{researchData.map((r,i)=><a className="source-card" key={r.url+i} href={r.url} target="_blank" rel="noopener noreferrer"><b>{r.title}</b><p>{r.snippet||"لا يوجد وصف متاح."}</p><span className="source-host"><ExternalLink size={11}/>{(()=>{try{return new URL(r.url).hostname}catch{return r.url}})()}{r.date?" • "+r.date:""}</span><span className="source-host">{r.contentStatus === "read" ? "تم استخراج نص الصفحة" : "المقتطف فقط"}</span></a>)}</div>
       </div> : researchBusy ? <div className="empty-card"><div className="empty-icon"><Activity size={22} className="spin"/></div><b>جاري البحث في الويب...</b><p>ثواني وتظهر النتائج مع المصادر.</p></div> : <div className="template-grid">{topics.map(t=><button key={t.title} type="button" className="suggestion-card" onClick={()=>setResearchQuery(t.query)}><div className="suggestion-icon"><Search size={19}/></div><span>{t.title}</span><ArrowUp size={15}/></button>)}</div>}
       {researchData.length===0&&!researchBusy?<div className="empty-inline">ابدأ بكتابة موضوع للبحث. البحث متاح لأي مجال، مش مجالًا واحدًا.</div>:null}
     </div>
