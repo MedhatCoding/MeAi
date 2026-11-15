@@ -59,9 +59,14 @@ function classify(query: string): "news" | "web" | "academic" {
   return "web";
 }
 
-function queryVariants(query: string) {
+function queryVariants(query: string, newsWindow: { start: Date; end: Date } | null = null) {
   const quoted = /[\u0600-\u06ff]/.test(query) ? query : '"' + query + '"';
-  return [...new Set([query, quoted].map((q) => q.trim()).filter((q) => q.length >= 2))].slice(0, 2);
+  const variants = [query, quoted];
+  if (newsWindow) {
+    const afterDate = new Date(newsWindow.start.getTime() - 24 * 60 * 60_000).toISOString().slice(0, 10);
+    variants.push(query + " after:" + afterDate);
+  }
+  return [...new Set(variants.map((q) => q.trim()).filter((q) => q.length >= 2))].slice(0, 3);
 }
 
 function isPublicHttpUrl(value: string) {
@@ -385,7 +390,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   const searchType = classify(query);
   const now = new Date();
   const newsWindow = searchType === "news" ? requestedNewsWindow(query, now) : null;
-  const variants = queryVariants(query);
+  const variants = queryVariants(query, newsWindow);
   const tasks = providers.flatMap((provider) => variants.map(async (variant) => {
     if (provider.name === "serper") return serperSearch(variant, searchType, provider.key);
     if (provider.name === "brave") return braveSearch(variant, provider.key);
@@ -452,7 +457,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
           : "";
         const inWindow = publishedAt && (
           (todayRequest && dateOnly ? dateOnlyKey === cairoToday :
-            publishedAt >= newsWindow.start && publishedAt <= newsWindow.end)
+            !dateOnly && publishedAt >= newsWindow.start && publishedAt <= newsWindow.end)
         );
         return inWindow ? [{ ...result, date: publishedAt.toISOString() }] : [];
       })
