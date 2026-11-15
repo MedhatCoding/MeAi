@@ -4,6 +4,7 @@ export type WebSearchResult = {
   snippet: string;
   date: string | null;
   source: string;
+  sourceType: "publisher" | "official" | "social" | "other";
   position: number | null;
   content?: string;
   contentStatus: "read" | "snippet_only" | "unavailable";
@@ -124,21 +125,35 @@ function canonicalUrl(value: string) {
   return url.toString();
 }
 
-const LOW_QUALITY_NEWS_HOSTS = [
+const SOCIAL_HOSTS = [
   "youtube.com", "youtu.be", "facebook.com", "fb.watch", "tiktok.com",
-  "instagram.com", "pinterest.com",
+  "instagram.com", "pinterest.com", "x.com", "twitter.com", "linkedin.com",
+  "reddit.com", "threads.net", "t.me",
 ];
 
-const TRUSTED_NEWS_HOSTS = [
+const PUBLISHER_HOSTS = [
   "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theguardian.com",
   "nytimes.com", "washingtonpost.com", "cnbc.com", "bloomberg.com",
   "techcrunch.com", "theverge.com", "arstechnica.com", "technologyreview.com",
-  "wired.com", "engadget.com", "openai.com", "anthropic.com", "blog.google",
-  "deepmind.google", "nvidia.com",
+  "wired.com", "engadget.com", "aljazeera.net", "alarabiya.net", "youm7.com",
+  " masrawy.com",
+];
+
+const OFFICIAL_HOSTS = [
+  "openai.com", "anthropic.com", "blog.google", "deepmind.google", "nvidia.com",
+  "microsoft.com", "apple.com", "cloudflare.com", "vercel.com", "github.com",
 ];
 
 function hostMatches(host: string, domains: string[]) {
   return domains.some((domain) => host === domain || host.endsWith("." + domain));
+}
+
+function classifySource(host: string): WebSearchResult["sourceType"] {
+  const normalized = host.toLowerCase().replace(/^www\\./, "");
+  if (hostMatches(normalized, SOCIAL_HOSTS)) return "social";
+  if (hostMatches(normalized, OFFICIAL_HOSTS) || normalized.endsWith(".gov") || normalized.endsWith(".gov.eg") || normalized.endsWith(".edu")) return "official";
+  if (hostMatches(normalized, PUBLISHER_HOSTS)) return "publisher";
+  return "other";
 }
 
 export async function searchWeb(queryInput: string): Promise<WebSearchResponse> {
@@ -229,14 +244,8 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       } catch { /* invalid provider URL */ }
     }
   }
-  candidates.sort((a, b) => {
-    if (searchType !== "news" || !usedFallback) return (a.position ?? 99) - (b.position ?? 99);
-    const hostA = new URL(a.url).hostname.toLowerCase().replace(/^www\./, "");
-    const hostB = new URL(b.url).hostname.toLowerCase().replace(/^www\./, "");
-    const scoreA = (hostMatches(hostA, TRUSTED_NEWS_HOSTS) ? 100 : 0) + (a.date ? 5 : 0) - (a.position ?? 99);
-    const scoreB = (hostMatches(hostB, TRUSTED_NEWS_HOSTS) ? 100 : 0) + (b.date ? 5 : 0) - (b.position ?? 99);
-    return scoreB - scoreA;
-  });
+  // Preserve provider relevance order; source category is descriptive, not a hard filter.
+  candidates.sort((a, b) => (a.position ?? 99) - (b.position ?? 99));
   const selected = candidates.slice(0, 8);
   const pageResults = await Promise.all(selected.slice(0, 4).map(async (result) => {
     const content = await readPage(result.url);
