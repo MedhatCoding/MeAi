@@ -64,9 +64,10 @@ export async function POST(request: NextRequest) {
     return jsonError("تعذر قراءة الطلب.", 400);
   }
 
-  // Search current questions through the shared multi-query, source-verification pipeline.
+  // Every ordinary chat turn gets live web context by default. Dedicated research
+  // workflows pass skipWebSearch after they have already gathered their own results.
   const latestUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const wantsWeb = !skipWebSearch && /\b(search|research|latest|today|news|sources|current|recent|price|weather|stock|exchange rate|version|release|compare|review|explain current)\b|ابحث|بحث|مصادر|مراجع|آخر|احدث|أحدث|اليوم|الأخبار|خبر|حالي|حديث|الآن|حاليا|حالياً|سعر|أسعار|طقس|نتيجة|نتائج|موعد|مواعيد|ترند|مستجدات|قرار جديد|القانون الجديد|إصدار|تحديث|قارن|مقارنة/i.test(latestUser);
+  const wantsWeb = !skipWebSearch && latestUser.trim().length >= 2;
   let searchResults: WebSearchResult[] | null = null;
   const systemMessage: ChatMessage = {
     role: "system",
@@ -76,18 +77,18 @@ export async function POST(request: NextRequest) {
   if (wantsWeb) {
     try {
       const search = await searchWeb(latestUser);
-      if (search.searchType === "news") {
-        systemMessage.content += "\n\nقواعد إضافية عند البحث عن الأخبار: اعرض حتى 5 نتائج هي الأكثر صلة. لا تستبعد أي فئة مصادر مسبقًا؛ قدّم الخبر الصحفي كخبر صحفي، والمصدر الرسمي كمصدر رسمي، والمنشور أو الفيديو الاجتماعي كمنشور/فيديو اجتماعي، والمواقع الأخرى كمصادر أخرى. لا تعرض منشورًا اجتماعيًا كأنه خبر صحفي، ولا تعتبر المصدر الرسمي ناشرًا صحفيًا. اذكر اسم المصدر ونوعه وتاريخ النشر كما ورد حرفيًا أو (غير متاح) والرابط المباشر. إذا لم يتوفر تاريخ فلا تصف النتيجة بأنها منشورة اليوم. إذا كانت النتائج ضعيفة الصلة، قل ذلك بدل حشو القائمة.";
-      }
+      systemMessage.content += "\n\nقواعد البحث الحي: تعامل مع السؤال باعتباره طلب بحث عام ما لم يحدد المستخدم نطاقًا آخر. لا تحصر البحث في الأخبار أو المواقع الرسمية أو المصادر الصحفية؛ استخدم كل أنواع النتائج ذات الصلة، بما فيها المواقع المتخصصة والمستندات والأبحاث والمنتديات ومنصات التواصل والفيديوهات والمصادر الرسمية والتجارية. اعرض حتى 8 نتائج قوية الصلة، ووازن بين المصادر المختلفة عند توافرها. لا تستبعد مصدرًا بسبب فئته؛ صنّف طبيعته بوضوح فقط. ميّز بين الادعاء والرأي والتجربة الشخصية والمعلومة الموثقة. اذكر المصدر ونوعه وتاريخ النشر كما ورد أو (غير متاح) والرابط المباشر. لا تخترع تاريخًا أو استنتاجًا، ولا تعتبر المقتطف وحده قراءة كاملة للصفحة. إذا كانت النتائج متعارضة، اعرض التعارض. إذا كانت ضعيفة الصلة أو لم يظهر شيء، قل ذلك بوضوح.";
+
       searchResults = search.results;
       const evidence = search.results.map((result, index) => {
         const pageText = result.content ? "\nالنص المستخرج من الصفحة (محدود):\n" + result.content.slice(0, 4500) : "";
         return (index + 1) + ". العنوان الأصلي: " + result.title +
           "\nالمصدر: " + result.source +
+          "\nمزوّد البحث: " + result.provider +
           "\nنوع المصدر: " + (result.sourceType === "publisher" ? "ناشر صحفي/إخباري" : result.sourceType === "official" ? "مصدر رسمي" : result.sourceType === "social" ? "منصة أو منشور اجتماعي" : "موقع/مصدر آخر") +
           "\nتاريخ النشر كما أورده محرك البحث: " + (result.date || "غير متاح") +
           "\nمقتطف محرك البحث: " + (result.snippet || "غير متاح") +
-          "\nحالة قراءة الصفحة: " + (result.contentStatus === "read" ? "تم استخراج نص الصفحة" : "لم يتوفر نص الصفحة الكامل") +
+          "\nحالة قراءة الصفحة: " + (result.contentStatus === "read" ? "تم استخراج نص الصفحة" : result.contentStatus === "unavailable" ? "تعذرت قراءة الصفحة" : "المتاح مقتطف محرك البحث فقط") +
           "\nالرابط الأصلي: " + result.url + pageText;
       }).join("\n\n");
       groundedMessages = groundedMessages.map((message, index) => index === groundedMessages.length - 1
