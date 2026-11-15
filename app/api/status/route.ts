@@ -14,6 +14,11 @@ export async function GET(request: NextRequest) {
   const provider = cloudflare ? "Cloudflare Workers AI" : compatible ? "OpenAI-compatible API" : null;
   const githubConfigured = Boolean(process.env.GITHUB_TOKEN);
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  const searchProviders = [
+    ...(process.env.SERPER_API_KEY ? ["serper"] : []),
+    ...(process.env.BRAVE_SEARCH_API_KEY ? ["brave"] : []),
+    ...(process.env.TAVILY_API_KEY ? ["tavily"] : []),
+  ];
   const googleOAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.MEAI_GOOGLE_REDIRECT_URI && process.env.NEXT_PUBLIC_SITE_URL && process.env.MEAI_SESSION_SECRET && process.env.MEAI_SESSION_SECRET.length >= 32);
 
   return Response.json({
@@ -28,7 +33,8 @@ export async function GET(request: NextRequest) {
       agentExecution: Boolean(provider),
       imageGeneration: cloudflare,
       videoGeneration: false,
-      webSearch: Boolean(process.env.SERPER_API_KEY),
+      webSearch: searchProviders.length > 0,
+      webSearchProviders: searchProviders,
       // Config presence is not equivalent to authentication or durable per-user storage.
       persistentCloudMemory: false,
       githubConfigured,
@@ -39,7 +45,8 @@ export async function GET(request: NextRequest) {
     },
     readiness: {
       chat: provider ? "configured_not_live_tested" : "missing_provider",
-      webSearch: process.env.SERPER_API_KEY ? "configured_not_live_tested" : "missing_api_key",
+      webSearch: searchProviders.length > 0 ? "configured_not_live_tested" : "missing_search_provider_key",
+      webSearchProviders: searchProviders,
       codeExecution: process.env.E2B_API_KEY ? "sandbox_provider_configured_not_live_tested" : "missing_e2b_api_key",
       github: githubConfigured ? "token_configured_identity_and_repository_access_must_be_checked" : "missing_token",
       githubSourceEditing: process.env.MEAI_AGENT_EDIT_ENABLED === "true" && githubConfigured ? "explicitly_enabled" : "disabled_by_default",
