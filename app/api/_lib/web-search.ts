@@ -209,7 +209,11 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       try {
         const url = new URL(row.link);
         if (url.hostname === "translate.google.com" || url.hostname.endsWith(".translate.goog")) continue;
-        if (searchType === "news" && usedFallback && hostMatches(url.hostname.toLowerCase().replace(/^www\./, ""), LOW_QUALITY_NEWS_HOSTS)) continue;
+        // News results must be publishable articles, not social posts or videos.
+        const newsHost = url.hostname.toLowerCase().replace(/^www\./, "");
+        if (searchType === "news" && hostMatches(newsHost, LOW_QUALITY_NEWS_HOSTS)) continue;
+        // For "today" searches, an undated result cannot be represented as today's news.
+        if (searchType === "news" && freshness === "qdr:d" && (typeof row.date !== "string" || !row.date.trim())) continue;
         const canonical = canonicalUrl(row.link);
         if (seen.has(canonical)) continue;
         seen.add(canonical);
