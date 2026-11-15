@@ -213,6 +213,8 @@ export async function POST(request: NextRequest) {
         if (typeof codeContent !== "string") throw new Error("لم يرجع النموذج كود Python صالحًا.");
         generatedCode = extractPythonCode(codeContent) || "";
         if (!generatedCode || Buffer.byteLength(generatedCode, "utf8") > 12000) throw new Error("الكود الناتج فارغ أو يتجاوز 12 كيلوبايت.");
+        const blockedPython = /(?:^\\s*(?:import\\s+(?:os|sys|subprocess|socket|requests|urllib|pathlib|shutil|ctypes|importlib)\\b|from\\s+(?:os|sys|subprocess|socket|requests|urllib|pathlib|shutil|ctypes|importlib)\\s+import\\b)|\\b(?:open|eval|exec|compile|__import__|__builtins__)\\b)/m;
+        if (blockedPython.test(generatedCode)) throw new Error("تم رفض كود يحتوي على استدعاءات نظام أو ملفات أو شبكة غير مسموحة.");
         sandbox = await Sandbox.create({ timeoutMs: 50000, requestTimeoutMs: 15000, allowInternetAccess: false });
         let lastError = "";
         for (let attempt = 1; attempt <= 3; attempt++) {
