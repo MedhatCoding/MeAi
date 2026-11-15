@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
         const pageText = result.content ? "\nالنص المستخرج من الصفحة (محدود):\n" + result.content.slice(0, 4500) : "";
         return (index + 1) + ". العنوان الأصلي: " + result.title +
           "\nالمصدر: " + result.source +
-          "\\nنوع المصدر: " + (result.sourceType === "publisher" ? "ناشر صحفي/إخباري" : result.sourceType === "official" ? "مصدر رسمي" : result.sourceType === "social" ? "منصة أو منشور اجتماعي" : "موقع/مصدر آخر") +
+          "\nنوع المصدر: " + (result.sourceType === "publisher" ? "ناشر صحفي/إخباري" : result.sourceType === "official" ? "مصدر رسمي" : result.sourceType === "social" ? "منصة أو منشور اجتماعي" : "موقع/مصدر آخر") +
           "\nتاريخ النشر كما أورده محرك البحث: " + (result.date || "غير متاح") +
           "\nمقتطف محرك البحث: " + (result.snippet || "غير متاح") +
           "\nحالة قراءة الصفحة: " + (result.contentStatus === "read" ? "تم استخراج نص الصفحة" : "لم يتوفر نص الصفحة الكامل") +
