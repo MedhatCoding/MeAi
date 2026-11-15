@@ -5,6 +5,7 @@ export type WebSearchResult = {
   date: string | null;
   source: string;
   sourceType: "publisher" | "official" | "social" | "other";
+  provider: "serper" | "brave" | "tavily";
   position: number | null;
   content?: string;
   contentStatus: "read" | "snippet_only" | "unavailable";
@@ -13,11 +14,30 @@ export type WebSearchResult = {
 export type WebSearchResponse = {
   query: string;
   searchType: "news" | "web" | "academic";
+  providersUsed: string[];
   queriesUsed: number;
   results: WebSearchResult[];
   fetchedAt: string;
   elapsedMs: number;
 };
+
+type RawResult = {
+  title?: unknown;
+  url?: unknown;
+  link?: unknown;
+  snippet?: unknown;
+  description?: unknown;
+  content?: unknown;
+  raw_content?: unknown;
+  date?: unknown;
+  page_age?: unknown;
+  published?: unknown;
+  published_date?: unknown;
+  source?: unknown;
+  position?: unknown;
+};
+
+type ProviderBatch = { provider: WebSearchResult["provider"]; rows: RawResult[] };
 
 function normalizeQuery(query: string) {
   return query
@@ -26,7 +46,7 @@ function normalizeQuery(query: string) {
     .replace(/^(?:من فضلك\s*)?(?:ابحث لي عن|ابحث عن|ابحث|دوّر على|دور على|search for|search|research)\s*/i, "")
     .replace(/\s+(?:على الويب|على الإنترنت|مع المصادر والروابط|واعرض المصادر)$/i, "")
     .trim()
-    .slice(0, 300);
+    .slice(0, 1000);
 }
 
 function classify(query: string): "news" | "web" | "academic" {
@@ -35,16 +55,9 @@ function classify(query: string): "news" | "web" | "academic" {
   return "web";
 }
 
-function queryVariants(query: string, type: "news" | "web" | "academic") {
-  const variants = [query];
-  if (type === "news") {
-    variants.push(query + " آخر الأخبار");
-  } else if (type === "academic") {
-    variants.push(query + " research paper study");
-  } else {
-    variants.push(query + (/\p{Script=Arabic}/u.test(query) ? " مصدر رسمي" : " official source"));
-  }
-  return [...new Set(variants.map((q) => q.trim()).filter((q) => q.length >= 2))].slice(0, 2);
+function queryVariants(query: string) {
+  const quoted = /[\u0600-\u06ff]/.test(query) ? query : '"' + query + '"';
+  return [...new Set([query, quoted].map((q) => q.trim()).filter((q) => q.length >= 2))].slice(0, 2);
 }
 
 function isPublicHttpUrl(value: string) {
@@ -80,37 +93,37 @@ function htmlToText(html: string) {
     .replace(/<(script|style|noscript|svg|nav|footer|header|form|aside)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
     .replace(/<(br|\/p|\/div|\/article|\/section|\/h[1-6]|\/li|\/tr)\b[^>]*>/gi, "\n")
     .replace(/<[^>]+>/g, " ");
-  return decodeHtml(text).replace(/[\t\r ]+/g, " ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, 9000);
+  return decodeHtml(text).replace(/[\t\r ]+/g, " ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, 12000);
 }
 
 async function readPage(url: string): Promise<string | null> {
   if (!isPublicHttpUrl(url)) return null;
   try {
     const response = await fetch(url, {
-      headers: { "User-Agent": "MeAIResearchBot/1.0 (+https://github.com/MedhatCoding/MeAi)", Accept: "text/html,text/plain;q=0.9" },
+      headers: { "User-Agent": "MeAIResearchBot/1.0 (+https://github.com/MedhatCoding/MeAi)", Accept: "text/html,text/plain,application/xhtml+xml,application/pdf;q=0.8,*/*;q=0.2" },
       redirect: "follow",
       cache: "no-store",
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(8000),
     });
     if (!response.ok || !response.body || !isPublicHttpUrl(response.url || url)) return null;
     const contentType = response.headers.get("content-type") || "";
     if (!/text\/html|text\/plain|application\/xhtml\+xml/i.test(contentType)) return null;
     const declared = Number(response.headers.get("content-length") || "0");
-    if (declared > 1_500_000) return null;
+    if (declared > 2_000_000) return null;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let raw = "";
     let bytes = 0;
-    while (bytes < 1_500_000) {
+    while (bytes < 2_000_000) {
       const { value, done } = await reader.read();
       if (done) break;
       bytes += value.byteLength;
       raw += decoder.decode(value, { stream: true });
-      if (bytes >= 1_500_000) break;
+      if (bytes >= 2_000_000) break;
     }
     try { await reader.cancel(); } catch { /* response already closed */ }
-    const extracted = /html|xhtml/i.test(contentType) ? htmlToText(raw) : raw.replace(/\s+/g, " ").trim().slice(0, 9000);
-    return extracted.length >= 250 ? extracted : null;
+    const extracted = /html|xhtml/i.test(contentType) ? htmlToText(raw) : raw.replace(/\s+/g, " ").trim().slice(0, 12000);
+    return extracted.length >= 180 ? extracted : null;
   } catch {
     return null;
   }
@@ -128,7 +141,7 @@ function canonicalUrl(value: string) {
 const SOCIAL_HOSTS = [
   "youtube.com", "youtu.be", "facebook.com", "fb.watch", "tiktok.com",
   "instagram.com", "pinterest.com", "x.com", "twitter.com", "linkedin.com",
-  "reddit.com", "threads.net", "t.me",
+  "reddit.com", "threads.net", "t.me", "telegram.me", "discord.com",
 ];
 
 const PUBLISHER_HOSTS = [
@@ -149,116 +162,156 @@ function hostMatches(host: string, domains: string[]) {
 }
 
 function classifySource(host: string): WebSearchResult["sourceType"] {
-  const normalized = host.toLowerCase().replace(/^www\\./, "");
+  const normalized = host.toLowerCase().replace(/^www\./, "");
   if (hostMatches(normalized, SOCIAL_HOSTS)) return "social";
-  if (hostMatches(normalized, OFFICIAL_HOSTS) || normalized.endsWith(".gov") || normalized.endsWith(".gov.eg") || normalized.endsWith(".edu")) return "official";
+  if (hostMatches(normalized, OFFICIAL_HOSTS) || normalized.endsWith(".gov") || normalized.includes(".gov.") || normalized.endsWith(".edu")) return "official";
   if (hostMatches(normalized, PUBLISHER_HOSTS)) return "publisher";
   return "other";
+}
+
+function toRows(value: unknown): RawResult[] {
+  return Array.isArray(value) ? value.filter((row): row is RawResult => !!row && typeof row === "object") : [];
+}
+
+async function serperSearch(query: string, type: "news" | "web" | "academic", key: string): Promise<ProviderBatch> {
+  const endpoint = type === "news" ? "news" : type === "academic" ? "scholar" : "search";
+  const response = await fetch("https://google.serper.dev/" + endpoint, {
+    method: "POST",
+    headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+    body: JSON.stringify({ q: query, gl: "eg", hl: /[\u0600-\u06ff]/.test(query) ? "ar" : "en", num: 10 }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(14000),
+  });
+  if (!response.ok) throw new Error("Serper HTTP " + response.status);
+  const data = await response.json() as { organic?: unknown; news?: unknown; organic_results?: unknown };
+  return { provider: "serper", rows: toRows(type === "news" ? data.news : type === "academic" ? data.organic : data.organic) };
+}
+
+async function braveSearch(query: string, key: string): Promise<ProviderBatch> {
+  const url = new URL("https://api.search.brave.com/res/v1/web/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("count", "10");
+  url.searchParams.set("country", "EG");
+  url.searchParams.set("search_lang", /[\u0600-\u06ff]/.test(query) ? "ar" : "en");
+  const response = await fetch(url, {
+    headers: { "X-Subscription-Token": key, Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(14000),
+  });
+  if (!response.ok) throw new Error("Brave HTTP " + response.status);
+  const data = await response.json() as { web?: { results?: unknown }; news?: { results?: unknown } };
+  return { provider: "brave", rows: toRows(data.web?.results) };
+}
+
+async function tavilySearch(query: string, type: "news" | "web" | "academic", key: string): Promise<ProviderBatch> {
+  const response = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: key,
+      query,
+      search_depth: "basic",
+      topic: type === "news" ? "news" : "general",
+      max_results: 10,
+      include_answer: false,
+      include_raw_content: true,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(14000),
+  });
+  if (!response.ok) throw new Error("Tavily HTTP " + response.status);
+  const data = await response.json() as { results?: unknown };
+  return { provider: "tavily", rows: toRows(data.results) };
+}
+
+function normalizeRow(row: RawResult, provider: WebSearchResult["provider"], position: number): WebSearchResult | null {
+  const title = typeof row.title === "string" ? row.title.trim() : "";
+  const link = typeof row.url === "string" ? row.url : typeof row.link === "string" ? row.link : "";
+  if (!title || !link || !isPublicHttpUrl(link)) return null;
+  try {
+    const url = new URL(link);
+    if (url.hostname === "translate.google.com" || url.hostname.endsWith(".translate.goog")) return null;
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    const date = [row.date, row.published_date, row.published, row.page_age].find((value) => typeof value === "string" && value.trim());
+    const snippet = [row.snippet, row.description, row.content].find((value) => typeof value === "string" && value.trim());
+    return {
+      title: title.slice(0, 300),
+      url: url.toString(),
+      snippet: typeof snippet === "string" ? snippet.slice(0, 1800) : "",
+      date: typeof date === "string" ? date.slice(0, 120) : null,
+      source: typeof row.source === "string" ? row.source.slice(0, 120) : host,
+      sourceType: classifySource(host),
+      provider,
+      position: typeof row.position === "number" ? row.position : position,
+      ...(typeof row.raw_content === "string" && row.raw_content.length > 180 ? { content: row.raw_content.slice(0, 12000), contentStatus: "read" as const } : {}),
+      contentStatus: typeof row.raw_content === "string" && row.raw_content.length > 180 ? "read" : "snippet_only",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function searchWeb(queryInput: string): Promise<WebSearchResponse> {
   const started = Date.now();
   const query = normalizeQuery(queryInput);
   if (query.length < 2) throw new Error("اكتب سؤال بحث أوضح.");
-  const key = process.env.SERPER_API_KEY;
-  if (!key) throw new Error("البحث غير مهيأ. أضف SERPER_API_KEY إلى أسرار الاستضافة.");
+  const keys = {
+    serper: process.env.SERPER_API_KEY,
+    brave: process.env.BRAVE_SEARCH_API_KEY,
+    tavily: process.env.TAVILY_API_KEY,
+  };
+  const providers = [
+    ...(keys.serper ? [{ name: "serper" as const, key: keys.serper }] : []),
+    ...(keys.brave ? [{ name: "brave" as const, key: keys.brave }] : []),
+    ...(keys.tavily ? [{ name: "tavily" as const, key: keys.tavily }] : []),
+  ];
+  if (!providers.length) throw new Error("البحث غير مهيأ. أضف مفتاح مزوّد بحث واحد على الأقل إلى أسرار الاستضافة.");
   const searchType = classify(query);
-  const endpoint = searchType === "news" ? "news" : searchType === "academic" ? "scholar" : "search";
-  const queries = queryVariants(query, searchType);
-  const freshness = /\b(today|breaking|last 24 hours)\b|اليوم|الآن|عاجل/i.test(query) ? "qdr:d"
-    : /\b(this week|past week|last 7 days)\b|هذا الأسبوع|الأسبوع الحالي|آخر أسبوع/i.test(query) ? "qdr:w"
-    : /\b(this month|past month|last 30 days)\b|هذا الشهر|الشهر الحالي|آخر شهر/i.test(query) ? "qdr:m"
-    : undefined;
-  const responses = await Promise.allSettled(queries.map(async (q) => {
-    const response = await fetch("https://google.serper.dev/" + endpoint, {
-      method: "POST",
-      headers: { "X-API-KEY": key, "Content-Type": "application/json" },
-      body: JSON.stringify({ q, gl: "eg", hl: /\p{Script=Arabic}/u.test(q) ? "ar" : "en", num: 8, ...(freshness ? { tbs: freshness } : {}) }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!response.ok) throw new Error("Serper HTTP " + response.status);
-    return await response.json() as {
-      organic?: { title?: unknown; link?: unknown; snippet?: unknown; date?: unknown; source?: unknown; position?: unknown }[];
-      news?: { title?: unknown; link?: unknown; snippet?: unknown; date?: unknown; source?: unknown; position?: unknown }[];
-    };
+  const variants = queryVariants(query);
+  const tasks = providers.flatMap((provider) => variants.map(async (variant) => {
+    if (provider.name === "serper") return serperSearch(variant, searchType, provider.key);
+    if (provider.name === "brave") return braveSearch(variant, provider.key);
+    return tavilySearch(variant, searchType, provider.key);
   }));
-  const successful = responses.filter((r): r is PromiseFulfilledResult<{organic?: {title?: unknown;link?: unknown;snippet?: unknown;date?: unknown;source?: unknown;position?: unknown}[];news?: {title?: unknown;link?: unknown;snippet?: unknown;date?: unknown;source?: unknown;position?: unknown}[]}> => r.status === "fulfilled");
-  if (!successful.length) {
-    console.info("[meai-search]", JSON.stringify({ event: "search_failed", type: searchType, queryCount: queries.length, elapsedMs: Date.now() - started }));
-    throw new Error("تعذر الاتصال بمحرك البحث. حاول مرة أخرى بعد قليل.");
-  }
-  // News vertical can occasionally return an empty array while the general web index has current coverage.
-  // Fall back to ordinary web search rather than reporting a false "no news" result.
-  let resultSets = successful.map((response) => response.value);
-  let usedFallback = false;
-  if (searchType === "news" && !resultSets.some((payload) => Array.isArray(payload.news) && payload.news.length > 0)) {
-    const broadQuery = query.replace(/\b(today|latest|breaking)\b|اليوم|أحدث|احدث|عاجل/gi, "").replace(/\s+/g, " ").trim();
-    // Keep fallback discovery source-neutral; classify results after retrieval.
-    const fallbackQueries = [...new Set([broadQuery, query].filter((value) => value.length >= 2))].slice(0, 2);
-    const fallbackResponses = await Promise.allSettled(fallbackQueries.map(async (q) => {
-      const response = await fetch("https://google.serper.dev/search", {
-        method: "POST",
-        headers: { "X-API-KEY": key, "Content-Type": "application/json" },
-        body: JSON.stringify({ q, gl: "eg", hl: /[\u0600-\u06FF]/.test(q) ? "ar" : "en", num: 8, ...(freshness ? { tbs: freshness } : {}) }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!response.ok) throw new Error("Serper fallback HTTP " + response.status);
-      return await response.json() as { organic?: { title?: unknown; link?: unknown; snippet?: unknown; date?: unknown; source?: unknown; position?: unknown }[] };
-    }));
-    const fallbackSets = fallbackResponses.filter((r): r is PromiseFulfilledResult<{organic?: {title?: unknown;link?: unknown;snippet?: unknown;date?: unknown;source?: unknown;position?: unknown}[]}> => r.status === "fulfilled").map((r) => r.value);
-    if (fallbackSets.length) {
-      resultSets = fallbackSets;
-      usedFallback = true;
-    }
+  const settled = await Promise.allSettled(tasks);
+  const batches = settled.flatMap((item) => item.status === "fulfilled" ? [item.value] : []);
+  if (!batches.length) {
+    console.info("[meai-search]", JSON.stringify({ event: "search_failed", type: searchType, providers: providers.map((p) => p.name), elapsedMs: Date.now() - started }));
+    throw new Error("تعذر الاتصال بمزوّدي البحث المهيئين. حاول مرة أخرى بعد قليل.");
   }
   const seen = new Set<string>();
   const candidates: WebSearchResult[] = [];
-  for (const payload of resultSets) {
-    const rows = usedFallback ? payload.organic : searchType === "news" ? payload.news : payload.organic;
-    for (const row of Array.isArray(rows) ? rows : []) {
-      if (typeof row.title !== "string" || typeof row.link !== "string" || !isPublicHttpUrl(row.link)) continue;
-      try {
-        const url = new URL(row.link);
-        if (url.hostname === "translate.google.com" || url.hostname.endsWith(".translate.goog")) continue;
-        // Source category is metadata, never a reason to discard a relevant result.
-        const sourceType = classifySource(url.hostname);
-        const canonical = canonicalUrl(row.link);
-        if (seen.has(canonical)) continue;
-        seen.add(canonical);
-        candidates.push({
-          title: row.title.slice(0, 300),
-          url: url.toString(),
-          snippet: typeof row.snippet === "string" ? row.snippet.slice(0, 1200) : "",
-          date: typeof row.date === "string" ? row.date.slice(0, 100) : null,
-          source: typeof row.source === "string" ? row.source.slice(0, 120) : url.hostname.replace(/^www\./, ""),
-          sourceType,
-          position: typeof row.position === "number" ? row.position : null,
-          contentStatus: "snippet_only",
-        });
-      } catch { /* invalid provider URL */ }
-    }
+  for (const batch of batches) {
+    batch.rows.forEach((row, index) => {
+      const normalized = normalizeRow(row, batch.provider, index + 1);
+      if (!normalized) return;
+      const canonical = canonicalUrl(normalized.url);
+      if (seen.has(canonical)) return;
+      seen.add(canonical);
+      candidates.push(normalized);
+    });
   }
-  // Preserve provider relevance order; source category is descriptive, not a hard filter.
-  candidates.sort((a, b) => (a.position ?? 99) - (b.position ?? 99));
-  const selected = candidates.slice(0, 8);
-  const pageResults = await Promise.all(selected.slice(0, 4).map(async (result) => {
+  // Keep results from every configured search provider; provider order is not a quality ranking.
+  const providerRank = new Map(providers.map((provider, index) => [provider.name, index]));
+  candidates.sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (providerRank.get(a.provider) ?? 99) - (providerRank.get(b.provider) ?? 99));
+  const selected = candidates.slice(0, 12);
+  const pageResults = await Promise.all(selected.filter((result) => !result.content).slice(0, 6).map(async (result) => {
     const content = await readPage(result.url);
     return content ? { ...result, content, contentStatus: "read" as const } : { ...result, contentStatus: "unavailable" as const };
   }));
   const byUrl = new Map(pageResults.map((result) => [canonicalUrl(result.url), result]));
   const results = selected.map((result) => byUrl.get(canonicalUrl(result.url)) || result);
   const elapsedMs = Date.now() - started;
+  const providersUsed = [...new Set(batches.map((batch) => batch.provider))];
   console.info("[meai-search]", JSON.stringify({
     event: "search_complete",
     type: searchType,
-    queryCount: successful.length + (usedFallback ? resultSets.length : 0),
-    fallbackUsed: usedFallback,
+    providersUsed,
+    queriesUsed: batches.length,
     resultCount: results.length,
-    pagesRead: results.filter((r) => r.contentStatus === "read").length,
-    pagesUnavailable: results.filter((r) => r.contentStatus === "unavailable").length,
+    pagesRead: results.filter((result) => result.contentStatus === "read").length,
+    pagesUnavailable: results.filter((result) => result.contentStatus === "unavailable").length,
     elapsedMs,
   }));
-  return { query, searchType, queriesUsed: successful.length + (usedFallback ? resultSets.length : 0), results, fetchedAt: new Date().toISOString(), elapsedMs };
+  return { query, searchType, providersUsed, queriesUsed: batches.length, results, fetchedAt: new Date().toISOString(), elapsedMs };
 }
