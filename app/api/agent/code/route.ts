@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
   try {
     const raw = await request.text();
     if (Buffer.byteLength(raw, "utf8") > MAX_CODE_BYTES + 1000) return fail("حجم طلب الكود أكبر من الحد المسموح.", 413);
-    const body = JSON.parse(raw) as { code?: unknown; language?: unknown };
+    const body = JSON.parse(raw) as { code?: unknown; language?: unknown; authorizationConfirmed?: unknown };
+    if (body.authorizationConfirmed !== true) return fail("أكد أن أي هدف أو نظام ستختبره مملوك لك أو لديك تصريح صريح لاختباره.", 400);
     if (typeof body.code !== "string" || !body.code.trim()) return fail("اكتب الكود المراد تشغيله.", 400);
     code = body.code;
     language = typeof body.language === "string" ? body.language.toLowerCase() : "python";
