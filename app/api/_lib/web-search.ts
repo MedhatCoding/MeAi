@@ -234,6 +234,7 @@ function normalizeRow(row: RawResult, provider: WebSearchResult["provider"], pos
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
     const date = [row.date, row.published_date, row.published, row.page_age].find((value) => typeof value === "string" && value.trim());
     const snippet = [row.snippet, row.description, row.content].find((value) => typeof value === "string" && value.trim());
+    const rawContent = typeof row.raw_content === "string" && row.raw_content.length > 180 ? row.raw_content.slice(0, 12000) : undefined;
     return {
       title: title.slice(0, 300),
       url: url.toString(),
@@ -243,8 +244,8 @@ function normalizeRow(row: RawResult, provider: WebSearchResult["provider"], pos
       sourceType: classifySource(host),
       provider,
       position: typeof row.position === "number" ? row.position : position,
-      ...(typeof row.raw_content === "string" && row.raw_content.length > 180 ? { content: row.raw_content.slice(0, 12000), contentStatus: "read" as const } : {}),
-      contentStatus: typeof row.raw_content === "string" && row.raw_content.length > 180 ? "read" : "snippet_only",
+      ...(rawContent ? { content: rawContent } : {}),
+      contentStatus: rawContent ? "read" : "snippet_only",
     };
   } catch {
     return null;
