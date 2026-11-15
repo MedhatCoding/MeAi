@@ -299,10 +299,12 @@ function cairoDayStart(now: Date) {
   }).formatToParts(now);
   const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
   // Cairo is UTC+2 in winter and UTC+3 during daylight saving time.
-  const localDate = get("year") + "-" + get("month") + "-" + get("day");
-  const localMidnight = new Date(localDate + "T00:00:00");
-  const cairoOffsetMinutes = -new Date(now.toLocaleString("en-US", { timeZone: "Africa/Cairo" })).getTimezoneOffset();
-  return new Date(localMidnight.getTime() - cairoOffsetMinutes * 60_000);
+  const localMidnightUtc = Date.UTC(Number(get("year")), Number(get("month")) - 1, Number(get("day")));
+  // Parsing Cairo's wall-clock representation as UTC exposes the current UTC offset,
+  // including daylight-saving changes, without depending on the server timezone.
+  const cairoWallClockAsUtc = Date.parse(now.toLocaleString("en-US", { timeZone: "Africa/Cairo" }));
+  const cairoOffsetMs = cairoWallClockAsUtc - now.getTime();
+  return new Date(localMidnightUtc - cairoOffsetMs);
 }
 
 function parsePublishedDate(value: string | null, now: Date): Date | null {
