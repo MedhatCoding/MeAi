@@ -293,6 +293,56 @@ function normalizeRow(row: RawResult, provider: WebSearchResult["provider"], pos
   }
 }
 
+function cairoDayStart(now: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
+  // Cairo is UTC+2 in winter and UTC+3 during daylight saving time.
+  const localDate = get("year") + "-" + get("month") + "-" + get("day");
+  const localMidnight = new Date(localDate + "T00:00:00");
+  const cairoOffsetMinutes = -new Date(now.toLocaleString("en-US", { timeZone: "Africa/Cairo" })).getTimezoneOffset();
+  return new Date(localMidnight.getTime() - cairoOffsetMinutes * 60_000);
+}
+
+function parsePublishedDate(value: string | null, now: Date): Date | null {
+  if (!value) return null;
+  const text = value.trim().toLowerCase();
+  if (!text) return null;
+  const absolute = Date.parse(text);
+  if (Number.isFinite(absolute)) return new Date(absolute);
+
+  const relative = text.match(/(?:^|\\b)(\\d+)\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\\s*ago\\b/i);
+  if (relative) {
+    const amount = Number(relative[1]);
+    const unit = relative[2].toLowerCase();
+    const factor = unit.startsWith("sec") ? 1_000 : unit.startsWith("min") ? 60_000 :
+      unit.startsWith("hour") || unit.startsWith("hr") ? 3_600_000 :
+      unit.startsWith("week") ? 604_800_000 : 86_400_000;
+    return new Date(now.getTime() - amount * factor);
+  }
+
+  const arabicRelative = text.match(/منذ\\s*(\\d+)\\s*(ثانية|ثوانٍ|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع)/);
+  if (arabicRelative) {
+    const amount = Number(arabicRelative[1]);
+    const unit = arabicRelative[2];
+    const factor = /ثانية|ثوانٍ/.test(unit) ? 1_000 : /دقيقة|دقائق/.test(unit) ? 60_000 :
+      /ساعة|ساعات/.test(unit) ? 3_600_000 : /أسبوع/.test(unit) ? 604_800_000 : 86_400_000;
+    return new Date(now.getTime() - amount * factor);
+  }
+  if (/^(just now|now|الآن|منذ قليل)$/.test(text)) return now;
+  if (/^(yesterday|أمس)$/.test(text)) return new Date(now.getTime() - 36 * 3_600_000);
+  return null;
+}
+
+function requestedNewsWindow(query: string, now: Date): { start: Date; end: Date } | null {
+  if (!/\\b(last\\s*24\\s*hours?|past\\s*24\\s*hours?|today|this\\s*day)\\b|آخر\\s*24\\s*ساعة|خلال\\s*24\\s*ساعة|اليوم|نهارده|النهارده/i.test(query)) return null;
+  if (/آخر\\s*24\\s*ساعة|خلال\\s*24\\s*ساعة|\\b(last|past)\\s*24\\s*hours?\\b/i.test(query)) {
+    return { start: new Date(now.getTime() - 24 * 60 * 60_000), end: now };
+  }
+  return { start: cairoDayStart(now), end: now };
+}
+
 export async function searchWeb(queryInput: string): Promise<WebSearchResponse> {
   const started = Date.now();
   const query = normalizeQuery(queryInput);
@@ -313,6 +363,8 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   ];
   if (!providers.length) throw new Error("البحث غير مهيأ. أضف مفتاح مزوّد بحث واحد على الأقل إلى أسرار الاستضافة.");
   const searchType = classify(query);
+  const now = new Date();
+  const newsWindow = searchType === "news" ? requestedNewsWindow(query, now) : null;
   const variants = queryVariants(query);
   const tasks = providers.flatMap((provider) => variants.map(async (variant) => {
     if (provider.name === "serper") return serperSearch(variant, searchType, provider.key);
@@ -339,10 +391,28 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       candidates.push(normalized);
     });
   }
-  // Keep results from every configured search provider; provider order is not a quality ranking.
+  // For explicit "today"/"last 24 hours" news requests, require a parseable
+  // publication timestamp inside the requested window. Missing/ambiguous dates
+  // are excluded rather than being presented as current news.
+  const datedCandidates = newsWindow
+    ? candidates.flatMap((result) => {
+        const publishedAt = parsePublishedDate(result.date, now);
+        return publishedAt && publishedAt >= newsWindow.start && publishedAt <= newsWindow.end
+          ? [{ ...result, date: publishedAt.toISOString() }]
+          : [];
+      })
+    : candidates;
+
+  // Keep provider diversity, but sort time-bounded news newest-first.
   const providerRank = new Map(providers.map((provider, index) => [provider.name, index]));
-  candidates.sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (providerRank.get(a.provider) ?? 99) - (providerRank.get(b.provider) ?? 99));
-  const selected = candidates.slice(0, 12);
+  if (newsWindow) {
+    datedCandidates.sort((a, b) => Date.parse(b.date || "") - Date.parse(a.date || "") ||
+      (a.position ?? 99) - (b.position ?? 99));
+  } else {
+    datedCandidates.sort((a, b) => (a.position ?? 99) - (b.position ?? 99) ||
+      (providerRank.get(a.provider) ?? 99) - (providerRank.get(b.provider) ?? 99));
+  }
+  const selected = datedCandidates.slice(0, 12);
   const pageResults = await Promise.all(selected.filter((result) => !result.content).slice(0, 6).map(async (result) => {
     const content = await readPage(result.url);
     return content ? { ...result, content, contentStatus: "read" as const } : { ...result, contentStatus: "unavailable" as const };
@@ -357,6 +427,9 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     providersUsed,
     queriesUsed: batches.length,
     resultCount: results.length,
+    temporalFilter: newsWindow ? "strict" : "none",
+    candidatesBeforeTemporalFilter: candidates.length,
+    candidatesAfterTemporalFilter: datedCandidates.length,
     pagesRead: results.filter((result) => result.contentStatus === "read").length,
     pagesUnavailable: results.filter((result) => result.contentStatus === "unavailable").length,
     elapsedMs,
