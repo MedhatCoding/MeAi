@@ -168,17 +168,31 @@ export default function Home() {
   }, [messages, busy]);
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; if (typeof window !== "undefined") localStorage.setItem("medhat-theme", dark ? "dark" : "light"); }, [dark]);
 
+  async function requestAgentExecution(task: string) {
+    const payload = { task, documents: documents.map(d => ({ name: d.name, content: d.content.slice(0, 40000) })) };
+    let response = await fetch("/api/agent/execute", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    });
+    let data = await response.json();
+    if (response.status === 428 && data.requiresCodeExecutionConfirmation) {
+      const approved = window.confirm("الوكيل يحتاج تشغيل كود Python مولّد داخل مختبر E2B مؤقت. اتصال الإنترنت الخارجي معطّل، والبيئة تُغلق بعد التنفيذ. هل توافق على التشغيل؟");
+      if (!approved) throw new Error("تم إلغاء تشغيل الكود بناءً على اختيارك.");
+      response = await fetch("/api/agent/execute", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, codeExecutionConfirmed: true }),
+      });
+      data = await response.json();
+    }
+    if (!response.ok) throw new Error(data.error || "تعذر تنفيذ المهمة.");
+    return data;
+  }
+
   async function executeAgentTask() {
     const task = agentTask.trim();
     if (!task || agentBusy) return;
     setAgentBusy(true); setAgentResult(""); setAgentSources([]); setAgentTools([]); setAgentTrace([]); setNotice("");
     try {
-      const response = await fetch("/api/agent/execute", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task, documents: documents.map(d => ({ name: d.name, content: d.content.slice(0, 40000) })) }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "تعذر تنفيذ المهمة.");
+      const data = await requestAgentExecution(task);
       setAgentResult(data.answer || "");
       setAgentSources(Array.isArray(data.searchSources) ? data.searchSources.filter((item: unknown) => item && typeof item === "object" && typeof (item as {title?:unknown}).title === "string" && typeof (item as {url?:unknown}).url === "string") : []);
       setAgentTools(Array.isArray(data.toolsUsed) ? data.toolsUsed.filter((item: unknown) => typeof item === "string") : []);
@@ -379,9 +393,7 @@ ${data.error.name}: ${data.error.value}` : ""));
         await streamInto(history, "وجدت " + results.length + " نتائج لبحثك، ودي خلاصة التحليل:\n\n", true);
       } else if (mode === "agent") {
         patchLast({ content: "جارٍ تنفيذ المهمة بالوكيل والأدوات..." });
-        const res = await fetch("/api/agent/execute", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ task: text, documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,40000) })) }) });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "تعذر تنفيذ المهمة.");
+        const data = await requestAgentExecution(text);
         const tools = Array.isArray(data.toolsUsed) ? (data.toolsUsed as string[]).filter(t => typeof t === "string") : [];
         const trace = Array.isArray(data.toolTrace) ? (data.toolTrace as AgentTraceItem[]).filter(t => t && typeof t.tool === "string" && typeof t.detail === "string") : [];
         const sources = Array.isArray(data.searchSources) ? (data.searchSources as AgentSource[]).filter(s => s && typeof s.title === "string" && typeof s.url === "string").map(s => ({ title: s.title, url: s.url, snippet: typeof s.date === "string" ? "التاريخ: " + s.date : "", date: typeof s.date === "string" ? s.date : null, position: null })) : [];
