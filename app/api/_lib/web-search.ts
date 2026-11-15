@@ -169,7 +169,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       const response = await fetch("https://google.serper.dev/search", {
         method: "POST",
         headers: { "X-API-KEY": key, "Content-Type": "application/json" },
-        body: JSON.stringify({ q, gl: "eg", hl: /\\p{Script=Arabic}/u.test(q) ? "ar" : "en", num: 8, ...(freshness ? { tbs: freshness } : {}) }),
+        body: JSON.stringify({ q, gl: "eg", hl: /[\u0600-\u06FF]/.test(q) ? "ar" : "en", num: 8, ...(freshness ? { tbs: freshness } : {}) }),
         cache: "no-store",
         signal: AbortSignal.timeout(12000),
       });
