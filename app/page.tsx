@@ -191,10 +191,10 @@ export default function Home() {
 
   async function runAgentCode() {
     if (!codeInput.trim() || codeBusy) return;
-    if (!window.confirm("سيتم إرسال الكود إلى بيئة E2B سحابية معزولة لتنفيذه. لا تضع كلمات مرور أو مفاتيح API أو بيانات خاصة داخل الكود. هل تريد التشغيل؟")) return;
+    if (!window.confirm("سيتم إرسال الكود إلى Sandbox سحابي مؤقت. قد تكون الشبكة الخارجية متاحة داخله؛ شغّل فقط تجاربك على أنظمة تملكها أو لديك تصريح لاختبارها، ولا تضع أسرارًا أو بيانات خاصة. هل تؤكد ذلك وتريد التشغيل؟")) return;
     setCodeBusy(true); setCodeOutput("");
     try {
-      const response = await fetch("/api/agent/code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: codeInput, language: codeLanguage }) });
+      const response = await fetch("/api/agent/code", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: codeInput, language: codeLanguage, authorizationConfirmed: true }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تعذر تشغيل الكود.");
       setCodeOutput((data.output || "") + (data.error ? `\
