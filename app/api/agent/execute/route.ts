@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
             generatedCode = repairedCode;
           }
         }
-        codeExecutionContext = "\n\nنتيجة تشغيل الكود الفعلية داخل E2B (اتصال الإنترنت الخارجي معطّل):\n" + executionSummary + "\nالكود النهائي الذي تم تشغيله:\n" + generatedCode.slice(0, 12000);
+        codeExecutionContext = "\n\nنتيجة تشغيل الكود الفعلية داخل E2B (اتصال الإنترنت الخارجي معطّل):\n" + codeExecutionSummary + "\nالكود النهائي الذي تم تشغيله:\n" + generatedCode.slice(0, 12000);
         toolTrace.push({ tool: "code_execution", status: codeExecutionSucceeded ? "success" : "failed", detail: codeExecutionSucceeded ? codeExecutionSummary.slice(0, 500) : "لم ينجح التنفيذ بعد ثلاث محاولات كحد أقصى. " + codeExecutionSummary.slice(0, 350) });
       } catch (error) {
         const detail = error instanceof Error ? error.message.slice(0, 400) : "تعذر تشغيل كود Python داخل E2B.";
@@ -309,7 +309,7 @@ export async function POST(request: NextRequest) {
     } catch { /* Keep the initial answer if the bounded review cannot complete. */ }
     toolTrace.push({ tool: "agent_review", status: reviewStatus, detail: reviewStatus === "success" ? "تمت مراجعة الإجابة مرة واحدة ومحاولة سد أي نقص قبل عرضها." : "تعذرت المراجعة الإضافية؛ عُرضت الإجابة الأولية دون ادعاء اكتمال المراجعة." });
     if (codeExecutionSucceeded && codeExecutionSummary) {
-      finalAnswer += "\\n\\n**تأكيد التنفيذ الفعلي داخل E2B:**\\n" + codeExecutionSummary + "\\nالإنترنت الخارجي معطّل عمدًا داخل المختبر؛ وهذا لا يمنع تنفيذ الحسابات المحلية.";
+      finalAnswer += "\n\n**تأكيد التنفيذ الفعلي داخل E2B:**\n" + codeExecutionSummary + "\nالإنترنت الخارجي معطّل عمدًا داخل المختبر؛ وهذا لا يمنع تنفيذ الحسابات المحلية.";
     }
     const toolsUsed = [...(searchUsed ? ["web_search"] : []), ...(githubReadSucceeded ? ["github_read"] : []), ...(githubFilesRead > 0 ? ["github_source_read"] : []), ...(docs ? ["file_analysis"] : []), ...(codeExecutionSucceeded ? ["code_execution"] : [])];
     if (docs) toolTrace.push({ tool: "file_analysis", status: "success", detail: `تم إرفاق ${documents.length} ملف/ملفات للتحليل.` });
