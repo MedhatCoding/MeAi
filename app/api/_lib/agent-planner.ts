@@ -75,7 +75,7 @@ export async function planAgentTools(input: {
         messages: [
           {
             role: "system",
-            content: 'You are a tool planner for a general-purpose AI assistant. Available read-only tools: web_search (current facts or sources), github_read (repository metadata), github_source_read (relevant source files), file_analysis (only when files are attached). Choose only necessary tools. Never plan writes, shell commands, logins, external account actions, or destructive actions. Return only JSON with keys "tools" (array), "searchQueries" (up to 3 short strings), and "githubPaths" (up to 3 safe repository-relative paths).',
+            content: 'You are a tool planner for a general-purpose AI assistant. Do not invent topical, political, cultural, or ethical restrictions. Available tools in this execution path are read-only: web_search (current facts or sources), github_read (repository metadata), github_source_read (relevant source files), file_analysis (only when files are attached). Choose every tool that materially helps the task, and do not skip research or file inspection merely to shorten the plan. This execution path cannot write files or run shell commands; state that limitation only when relevant. Return only JSON with keys "tools" (array), "searchQueries" (up to 3 short strings), and "githubPaths" (up to 3 safe repository-relative paths).',
           },
           {
             role: "user",
