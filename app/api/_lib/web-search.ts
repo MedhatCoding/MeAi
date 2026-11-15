@@ -156,11 +156,36 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     console.info("[meai-search]", JSON.stringify({ event: "search_failed", type: searchType, queryCount: queries.length, elapsedMs: Date.now() - started }));
     throw new Error("تعذر الاتصال بمحرك البحث. حاول مرة أخرى بعد قليل.");
   }
+  // News vertical can occasionally return an empty array while the general web index has current coverage.
+  // Fall back to ordinary web search rather than reporting a false "no news" result.
+  let resultSets = successful.map((response) => response.value);
+  let usedFallback = false;
+  if (searchType === "news" && !resultSets.some((payload) => Array.isArray(payload.news) && payload.news.length > 0)) {
+    const fallbackQueries = [...new Set([
+      query,
+      query.replace(/\b(today|latest|breaking)\b|اليوم|أحدث|احدث|عاجل/gi, "").replace(/\s+/g, " ").trim(),
+    ].filter((value) => value.length >= 2))].slice(0, 2);
+    const fallbackResponses = await Promise.allSettled(fallbackQueries.map(async (q) => {
+      const response = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+        body: JSON.stringify({ q, gl: "eg", hl: /\\p{Script=Arabic}/u.test(q) ? "ar" : "en", num: 8, ...(freshness ? { tbs: freshness } : {}) }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!response.ok) throw new Error("Serper fallback HTTP " + response.status);
+      return await response.json() as { organic?: { title?: unknown; link?: unknown; snippet?: unknown; date?: unknown; source?: unknown; position?: unknown }[] };
+    }));
+    const fallbackSets = fallbackResponses.filter((r): r is PromiseFulfilledResult<{organic?: {title?: unknown;link?: unknown;snippet?: unknown;date?: unknown;source?: unknown;position?: unknown}[]}> => r.status === "fulfilled").map((r) => r.value);
+    if (fallbackSets.length) {
+      resultSets = fallbackSets;
+      usedFallback = true;
+    }
+  }
   const seen = new Set<string>();
   const candidates: WebSearchResult[] = [];
-  for (const response of successful) {
-    const payload = response.value;
-    const rows = searchType === "news" ? payload.news : payload.organic;
+  for (const payload of resultSets) {
+    const rows = usedFallback ? payload.organic : searchType === "news" ? payload.news : payload.organic;
     for (const row of Array.isArray(rows) ? rows : []) {
       if (typeof row.title !== "string" || typeof row.link !== "string" || !isPublicHttpUrl(row.link)) continue;
       try {
@@ -193,7 +218,8 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   console.info("[meai-search]", JSON.stringify({
     event: "search_complete",
     type: searchType,
-    queryCount: successful.length,
+    queryCount: successful.length + (usedFallback ? resultSets.length : 0),
+    fallbackUsed: usedFallback,
     resultCount: results.length,
     pagesRead: results.filter((r) => r.contentStatus === "read").length,
     pagesUnavailable: results.filter((r) => r.contentStatus === "unavailable").length,
