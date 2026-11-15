@@ -23,7 +23,7 @@ type RequestPlan={intent:string;needsSearch:boolean;searchQueries:string[];fresh
 function fallbackPlan(q:string):RequestPlan {
  const chat=/^(hi|hello|hey|thanks|thank you|السلام عليكم|اهلا|أهلا|ازيك|إزيك|شكرا|شكرًا|تمام|ماشي|حاضر|عرف نفسك)[.!؟?\s]*$/i.test(q);
  const transform=/^(ترجم|لخص|لخّص|أعد صياغة|صحح|صحّح|rewrite|translate|summari[sz]e)\b/i.test(q);
- const creative=/^(اكتب لي قصة|اكتب قصيدة|اكتب إعلان|write a story|write a poem)\\b/i.test(q);
+ const creative=/^(اكتب لي قصة|اكتب قصيدة|اكتب إعلان|write a story|write a poem)\b/i.test(q);
  const search=!chat&&!transform&&!creative&&q.trim().length>=8;
  return {intent:chat?"conversation":transform?"transformation":creative?"creative":"information",needsSearch:search,searchQueries:search?[q]:[],freshness:/اليوم|الآن|حالي|آخر|أحدث|سعر|طقس|today|latest|current|price|weather/i.test(q)?"current":search?"evergreen":"none",reason:"fallback"};
 }
