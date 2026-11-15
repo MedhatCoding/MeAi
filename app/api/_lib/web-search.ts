@@ -314,7 +314,7 @@ function parsePublishedDate(value: string | null, now: Date): Date | null {
   const absolute = Date.parse(text);
   if (Number.isFinite(absolute)) return new Date(absolute);
 
-  const relative = text.match(/(?:^|\\b)(\\d+)\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\\s*ago\\b/i);
+  const relative = text.match(/(?:^|\b)(\d+)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\s*ago\b/i);
   if (relative) {
     const amount = Number(relative[1]);
     const unit = relative[2].toLowerCase();
@@ -324,7 +324,7 @@ function parsePublishedDate(value: string | null, now: Date): Date | null {
     return new Date(now.getTime() - amount * factor);
   }
 
-  const arabicRelative = text.match(/منذ\\s*(\\d+)\\s*(ثانية|ثوانٍ|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع)/);
+  const arabicRelative = text.match(/منذ\s*(\d+)\s*(ثانية|ثوانٍ|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع)/);
   if (arabicRelative) {
     const amount = Number(arabicRelative[1]);
     const unit = arabicRelative[2];
@@ -338,8 +338,8 @@ function parsePublishedDate(value: string | null, now: Date): Date | null {
 }
 
 function requestedNewsWindow(query: string, now: Date): { start: Date; end: Date } | null {
-  if (!/\\b(last\\s*24\\s*hours?|past\\s*24\\s*hours?|today|this\\s*day)\\b|آخر\\s*24\\s*ساعة|خلال\\s*24\\s*ساعة|اليوم|نهارده|النهارده/i.test(query)) return null;
-  if (/آخر\\s*24\\s*ساعة|خلال\\s*24\\s*ساعة|\\b(last|past)\\s*24\\s*hours?\\b/i.test(query)) {
+  if (!/\b(last\s*24\s*hours?|past\s*24\s*hours?|today|this\s*day)\b|آخر\s*24\s*ساعة|خلال\s*24\s*ساعة|اليوم|نهارده|النهارده/i.test(query)) return null;
+  if (/آخر\s*24\s*ساعة|خلال\s*24\s*ساعة|\b(last|past)\s*24\s*hours?\b/i.test(query)) {
     return { start: new Date(now.getTime() - 24 * 60 * 60_000), end: now };
   }
   return { start: cairoDayStart(now), end: now };
@@ -397,7 +397,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   // publication timestamp inside the requested window. Missing/ambiguous dates
   // are excluded rather than being presented as current news.
   const todayRequest = newsWindow !== null &&
-    !/آخر\\s*24\\s*ساعة|خلال\\s*24\\s*ساعة|\\b(last|past)\\s*24\\s*hours?\\b/i.test(query);
+    !/آخر\s*24\s*ساعة|خلال\s*24\s*ساعة|\b(last|past)\s*24\s*hours?\b/i.test(query);
   const cairoToday = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(now);
@@ -407,8 +407,8 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
         const publishedAt = parsePublishedDate(rawDate, now);
         // Date-only publisher metadata can verify "today" as a calendar day,
         // but cannot prove that an item falls within a rolling last-24-hours window.
-        const dateOnly = !/[T ]\\d{1,2}:\\d{2}/.test(rawDate) &&
-          !/\\b(ago|منذ|now|الآن|yesterday|أمس)\\b/i.test(rawDate);
+        const dateOnly = !/[T ]\d{1,2}:\d{2}/.test(rawDate) &&
+          !/\b(ago|منذ|now|الآن|yesterday|أمس)\b/i.test(rawDate);
         const dateOnlyKey = dateOnly && publishedAt
           ? new Intl.DateTimeFormat("en-CA", {
               timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit",
