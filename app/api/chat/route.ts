@@ -14,7 +14,7 @@ function jsonError(message: string, status: number) {
 
 function isRolling24HourNewsRequest(query: string) {
   const normalized = query.normalize("NFKC").replace(/[أإآ]/g, "ا");
-  return /\\b(?:last|past)\\s*24\\s*hours?\\b|(?:اخر|خلال)\\s*24\\s*ساع(?:ة|ه)/i.test(normalized);
+  return /\b(?:last|past)\s*24\s*hours?\b|(?:اخر|خلال)\s*24\s*ساع(?:ة|ه)/i.test(normalized);
 }
 
 function isPublishedWithinLast24Hours(value: string | undefined, now: number) {
@@ -22,7 +22,7 @@ function isPublishedWithinLast24Hours(value: string | undefined, now: number) {
   const raw = value.trim();
   let published = Date.parse(raw);
   if (!Number.isFinite(published)) {
-    const relative = raw.match(/(?:^|\\b)(\\d+)\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\\s*ago\\b/i);
+    const relative = raw.match(/(?:^|\b)(\d+)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?)\s*ago\b/i);
     if (relative) {
       const amount = Number(relative[1]);
       const unit = relative[2].toLowerCase();
@@ -31,7 +31,7 @@ function isPublishedWithinLast24Hours(value: string | undefined, now: number) {
         unit.startsWith("week") ? 604_800_000 : 86_400_000;
       published = now - amount * factor;
     } else {
-      const arabicRelative = raw.match(/منذ\\s*(\\d+)\\s*(ثانية|ثوانٍ|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع)/);
+      const arabicRelative = raw.match(/منذ\s*(\d+)\s*(ثانية|ثوانٍ|دقيقة|دقائق|ساعة|ساعات|يوم|أيام|أسبوع|أسابيع)/);
       if (arabicRelative) {
         const amount = Number(arabicRelative[1]);
         const unit = arabicRelative[2];
