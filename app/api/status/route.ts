@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     ...(process.env.SERPER_API_KEY ? ["serper"] : []),
     ...(process.env.BRAVE_SEARCH_API_KEY ? ["brave"] : []),
     ...(process.env.TAVILY_API_KEY ? ["tavily"] : []),
+    ...(process.env.ENDLESS_SEARCH_KEY ? ["endless"] : []),
   ];
   const googleOAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.MEAI_GOOGLE_REDIRECT_URI && process.env.NEXT_PUBLIC_SITE_URL && process.env.MEAI_SESSION_SECRET && process.env.MEAI_SESSION_SECRET.length >= 32);
 
