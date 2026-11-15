@@ -5,7 +5,7 @@ export type WebSearchResult = {
   date: string | null;
   source: string;
   sourceType: "publisher" | "official" | "social" | "other";
-  provider: "serper" | "brave" | "tavily";
+  provider: "serper" | "brave" | "tavily" | "endless";
   position: number | null;
   content?: string;
   contentStatus: "read" | "snippet_only" | "unavailable";
@@ -33,6 +33,7 @@ type RawResult = {
   page_age?: unknown;
   published?: unknown;
   published_date?: unknown;
+  publishedDate?: unknown;
   source?: unknown;
   position?: unknown;
 };
@@ -224,6 +225,22 @@ async function tavilySearch(query: string, type: "news" | "web" | "academic", ke
   return { provider: "tavily", rows: toRows(data.results) };
 }
 
+async function endlessSearch(query: string, type: "news" | "web" | "academic", key: string): Promise<ProviderBatch> {
+  const url = new URL("https://search.endless.sbs/api/v1/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("type", type === "news" ? "news" : "web");
+  url.searchParams.set("safesearch", "0");
+  url.searchParams.set("pageno", "1");
+  const response = await fetch(url, {
+    headers: { "X-API-Key": key, Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(14000),
+  });
+  if (!response.ok) throw new Error("Endless HTTP " + response.status);
+  const data = await response.json() as { results?: unknown };
+  return { provider: "endless", rows: toRows(data.results) };
+}
+
 function normalizeRow(row: RawResult, provider: WebSearchResult["provider"], position: number): WebSearchResult | null {
   const title = typeof row.title === "string" ? row.title.trim() : "";
   const link = typeof row.url === "string" ? row.url : typeof row.link === "string" ? row.link : "";
@@ -232,7 +249,7 @@ function normalizeRow(row: RawResult, provider: WebSearchResult["provider"], pos
     const url = new URL(link);
     if (url.hostname === "translate.google.com" || url.hostname.endsWith(".translate.goog")) return null;
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
-    const date = [row.date, row.published_date, row.published, row.page_age].find((value) => typeof value === "string" && value.trim());
+    const date = [row.date, row.published_date, row.publishedDate, row.published, row.page_age].find((value) => typeof value === "string" && value.trim());
     const snippet = [row.snippet, row.description, row.content].find((value) => typeof value === "string" && value.trim());
     const rawContent = typeof row.raw_content === "string" && row.raw_content.length > 180 ? row.raw_content.slice(0, 12000) : undefined;
     return {
@@ -260,11 +277,13 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     serper: process.env.SERPER_API_KEY,
     brave: process.env.BRAVE_SEARCH_API_KEY,
     tavily: process.env.TAVILY_API_KEY,
+    endless: process.env.ENDLESS_SEARCH_KEY,
   };
   const providers = [
     ...(keys.serper ? [{ name: "serper" as const, key: keys.serper }] : []),
     ...(keys.brave ? [{ name: "brave" as const, key: keys.brave }] : []),
     ...(keys.tavily ? [{ name: "tavily" as const, key: keys.tavily }] : []),
+    ...(keys.endless ? [{ name: "endless" as const, key: keys.endless }] : []),
   ];
   if (!providers.length) throw new Error("البحث غير مهيأ. أضف مفتاح مزوّد بحث واحد على الأقل إلى أسرار الاستضافة.");
   const searchType = classify(query);
@@ -272,7 +291,8 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   const tasks = providers.flatMap((provider) => variants.map(async (variant) => {
     if (provider.name === "serper") return serperSearch(variant, searchType, provider.key);
     if (provider.name === "brave") return braveSearch(variant, provider.key);
-    return tavilySearch(variant, searchType, provider.key);
+    if (provider.name === "tavily") return tavilySearch(variant, searchType, provider.key);
+    return endlessSearch(variant, searchType, provider.key);
   }));
   const settled = await Promise.allSettled(tasks);
   const batches = settled.flatMap((item) => item.status === "fulfilled" ? [item.value] : []);
