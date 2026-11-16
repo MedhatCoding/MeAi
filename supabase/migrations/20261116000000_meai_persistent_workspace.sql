@@ -85,3 +85,5 @@ create policy "memory owner access" on public.memories for all to authenticated 
 drop policy if exists "meai memory owner access" on public.meai_user_memory;
 create policy "meai memory owner access" on public.meai_user_memory for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 grant select, insert, update, delete on public.profiles, public.conversations, public.messages, public.workspace_files, public.projects, public.memories, public.meai_user_memory to authenticated;
+
+revoke all privileges on table public.profiles, public.conversations, public.messages, public.workspace_files, public.projects, public.memories, public.meai_user_memory from anon, public;
