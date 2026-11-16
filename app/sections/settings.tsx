@@ -82,7 +82,7 @@ export default function SettingsSection({
       <div className="settings-card">
         <div className="list-header"><div><h3>الحساب والذاكرة السحابية</h3><small className="card-sub">مزامنة بياناتك بين الأجهزة باستخدام Supabase Auth وRLS</small></div><span className={accountUser?"pill purple-pill":"pill warning-pill"}>{accountUser?"مسجل الدخول":"غير مسجل"}</span></div>
         {accountUser ? <>
-          <div className="setting-row"><div className="setting-icon"><Cloud size={18}/></div><div className="setting-copy"><b>{accountUser.email}</b><small>الجلسة محفوظة لهذا التبويب فقط وتنتهي وفق إعدادات Supabase.</small></div><button className="secondary-btn" onClick={signOutAccount}><LogOut size={15}/> تسجيل الخروج</button></div>
+          <div className="setting-row"><div className="setting-icon"><Cloud size={18}/></div><div className="setting-copy"><b>{accountUser.email}</b><small>الجلسة محفوظة على هذا الجهاز، ويتم تجديد رمز الدخول تلقائيًا وفق إعدادات Supabase.</small></div><button className="secondary-btn" onClick={signOutAccount}><LogOut size={15}/> تسجيل الخروج</button></div>
           <div className="action-row"><button className="primary-btn" disabled={accountBusy} onClick={()=>void syncCloudMemory("save")}>حفظ في السحابة</button><button className="secondary-btn" disabled={accountBusy} onClick={()=>void syncCloudMemory("load")}>تحميل من السحابة</button></div>
         </> : <div className="auth-grid">
           <input aria-label="البريد الإلكتروني" type="email" autoComplete="email" value={accountEmail} onChange={e=>setAccountEmail(e.target.value)} placeholder="البريد الإلكتروني"/>
