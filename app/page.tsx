@@ -464,7 +464,7 @@ ${data.error.name}: ${data.error.value}` : ""));
 
   async function handleSend(value = input, mode = composerMode) {
     const text = value.trim();
-    if (!text || busy) return;
+    if ((!text && !(mode === "chat" && pendingAttachments.length)) || busy) return;
     if (mode === "chat") { await sendMessage(text); return; }
     const stamp = () => new Date().toLocaleTimeString("ar-EG", {hour:"2-digit",minute:"2-digit"});
     const next: Message[] = [...messages, { role: "user", content: text, time: stamp() }, { role: "assistant", content: "", time: stamp() }];
