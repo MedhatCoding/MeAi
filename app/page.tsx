@@ -475,91 +475,108 @@ ${data.error.name}: ${data.error.value}` : ""));
     if (!list?.length) return;
     const incoming = Array.from(list);
     if (!accountToken) {
-      setNotice("لرفع الصور وملفات PDF والملفات الكبيرة، سجّل الدخول أولًا من الإعدادات. لم يتم حفظ هذه الملفات.");
+      setNotice("لرفع الملفات إلى التخزين السحابي، سجّل الدخول أولًا من الإعدادات. لم يتم حفظ أي ملف.");
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
 
     setCloudUploadProgress("");
-    let completed = 0;
+    const uploaded: string[] = [];
+    const failed: string[] = [];
     const skipped: string[] = [];
+    let config: { uploadEndpoint?: string; anonKey?: string; userId?: string } | null = null;
     try {
       const configResponse = await fetch("/api/account/storage", { headers: { Authorization: `Bearer ${accountToken}` }, cache: "no-store" });
-      const config = await configResponse.json();
-      if (!configResponse.ok || !config.uploadEndpoint || !config.anonKey || !config.userId) throw new Error(config.error || "تعذر تهيئة التخزين السحابي.");
+      const configData = await configResponse.json();
+      if (!configResponse.ok || !configData.uploadEndpoint || !configData.anonKey || !configData.userId) {
+        throw new Error(configData.error || "تعذر تهيئة التخزين السحابي.");
+      }
+      config = configData;
 
       for (const file of incoming) {
         if (file.size <= 0) { skipped.push(file.name + " (ملف فارغ)"); continue; }
         if (file.size > 50 * 1024 * 1024) { skipped.push(file.name + " (أكبر من 50MB)"); continue; }
-        const safeName = file.name.replace(/[^\p{L}\p{N}._-]/gu, "_").slice(-180) || "file";
+        const safeName = file.name.replace(/[^\\p{L}\\p{N}._-]/gu, "_").slice(-180) || "file";
         const path = `${config.userId}/${crypto.randomUUID()}-${safeName}`;
-        setCloudUploadProgress(`رفع ${file.name} • 0%`);
+        setCloudUploadProgress(`جاري رفع ${file.name} • 0% (من ${incoming.length})`);
 
-        let tusError: unknown = null;
         try {
-          await new Promise<void>((resolve, reject) => {
-            const upload = new tus.Upload(file, {
-              endpoint: config.uploadEndpoint,
-              retryDelays: [0, 3000, 5000, 10000, 20000],
-              headers: { authorization: `Bearer ${accountToken}`, apikey: config.anonKey },
-              uploadDataDuringCreation: true,
-              removeFingerprintOnSuccess: true,
-              chunkSize: 6 * 1024 * 1024,
-              metadata: {
-                bucketName: "meai-files",
-                objectName: path,
-                contentType: file.type || "application/octet-stream",
-                cacheControl: "3600",
-              },
-              onError: reject,
-              onProgress: (uploaded, total) => setCloudUploadProgress(`رفع ${file.name} • ${Math.floor(uploaded / Math.max(1, total) * 100)}%`),
-              onSuccess: () => resolve(),
+          let tusError: unknown = null;
+          try {
+            await new Promise<void>((resolve, reject) => {
+              const upload = new tus.Upload(file, {
+                endpoint: config!.uploadEndpoint!,
+                retryDelays: [0, 3000, 5000, 10000, 20000],
+                headers: { authorization: `Bearer ${accountToken}`, apikey: config!.anonKey! },
+                uploadDataDuringCreation: true,
+                removeFingerprintOnSuccess: true,
+                chunkSize: 6 * 1024 * 1024,
+                metadata: {
+                  bucketName: "meai-files",
+                  objectName: path,
+                  contentType: file.type || "application/octet-stream",
+                  cacheControl: "3600",
+                },
+                onError: reject,
+                onProgress: (uploadedBytes, totalBytes) => setCloudUploadProgress(`رفع ${file.name} • ${Math.floor(uploadedBytes / Math.max(1, totalBytes) * 100)}%`),
+                onSuccess: () => resolve(),
+              });
+              void upload.findPreviousUploads().then(previous => {
+                if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
+                upload.start();
+              }).catch(reject);
             });
-            void upload.findPreviousUploads().then(previous => {
-              if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
-              upload.start();
-            }).catch(reject);
-          });
-        } catch (error) {
-          tusError = error;
-          // Small files (especially photos) get a standard Storage upload fallback.
-          if (file.size > 6 * 1024 * 1024) throw error;
-          setCloudUploadProgress(`إعادة محاولة رفع ${file.name} بالطريقة البديلة…`);
-          const direct = await fetch(`${config.uploadEndpoint.replace("/upload/resumable", "/object")}/meai-files/${path.split("/").map(encodeURIComponent).join("/")}`, {
-            method: "POST",
-            headers: {
-              authorization: `Bearer ${accountToken}`,
-              apikey: config.anonKey,
-              "Content-Type": file.type || "application/octet-stream",
-              "x-upsert": "false",
-            },
-            body: file,
-          });
-          if (!direct.ok) {
-            const detail = await direct.text().catch(() => "");
-            throw new Error(`فشل رفع "${file.name}" عبر الطريقتين. ${detail.slice(0, 240) || (tusError instanceof Error ? tusError.message : "تحقق من اتصال التخزين وصلاحيات الحساب.")}`);
+          } catch (error) {
+            tusError = error;
+            if (file.size > 6 * 1024 * 1024) throw error;
+            setCloudUploadProgress(`تعذرت الطريقة الأولى؛ إعادة محاولة ${file.name}…`);
+            const direct = await fetch(`${config!.uploadEndpoint!.replace("/upload/resumable", "/object")}/meai-files/${path.split("/").map(encodeURIComponent).join("/")}`, {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${accountToken}`,
+                apikey: config!.anonKey!,
+                "Content-Type": file.type || "application/octet-stream",
+                "x-upsert": "false",
+              },
+              body: file,
+            });
+            if (!direct.ok) {
+              const detail = await direct.text().catch(() => "");
+              throw new Error(`فشل الرفع عبر الطريقتين. ${detail.slice(0, 220) || (tusError instanceof Error ? tusError.message : "تحقق من صلاحيات التخزين والاتصال.")}`);
+            }
           }
-          setCloudUploadProgress(`تم رفع ${file.name} • 100%`);
-        }
 
-        const register = await fetch("/api/account/storage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
-          body: JSON.stringify({ action: "register", name: file.name, path, mimeType: file.type || "application/octet-stream", size: file.size }),
-        });
-        const registered = await register.json();
-        if (!register.ok) throw new Error(registered.error || `تم رفع ${file.name} لكن تعذر تسجيله في قائمة الملفات.`);
-        completed++;
+          const register = await fetch("/api/account/storage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
+            body: JSON.stringify({ action: "register", name: file.name, path, mimeType: file.type || "application/octet-stream", size: file.size }),
+          });
+          const registered = await register.json();
+          if (!register.ok) throw new Error(registered.error || "تم رفع الملف لكن تعذر تسجيله في قائمة الملفات.");
+          uploaded.push(file.name);
+        } catch (error) {
+          failed.push(`${file.name}: ${error instanceof Error ? error.message : "فشل غير معروف"}`);
+        }
       }
+
       await refreshCloudFiles(accountToken);
-      setCloudUploadProgress("");
-      setNotice(`تم رفع ${completed} ملف إلى التخزين السحابي.${skipped.length ? " تم تخطي: " + skipped.join("، ") : ""}`);
+      if (uploaded.length && !failed.length && !skipped.length) {
+        setNotice(`تم رفع ${uploaded.length} ملف بنجاح إلى التخزين السحابي.`);
+      } else {
+        const parts = [
+          uploaded.length ? `نجح رفع ${uploaded.length}: ${uploaded.join("، ")}` : "",
+          failed.length ? `فشل رفع ${failed.length}: ${failed.join(" | ")}` : "",
+          skipped.length ? `تم تخطي: ${skipped.join("، ")}` : "",
+        ].filter(Boolean);
+        setNotice(parts.join(" — ") || "لم يتم رفع أي ملف.");
+      }
     } catch (error) {
-      setCloudUploadProgress("");
-      setNotice(error instanceof Error ? error.message : "تعذر رفع الملفات إلى السحابة.");
+      setNotice(error instanceof Error ? error.message : "تعذر تهيئة رفع الملفات.");
       await refreshCloudFiles(accountToken);
+    } finally {
+      setCloudUploadProgress("");
+      if (fileRef.current) fileRef.current.value = "";
     }
-    if (fileRef.current) fileRef.current.value = "";
   }
   function analyzeDocument(doc:{name:string;content:string}) {
     const prompt = `حلّل الملف التالي اعتمادًا على محتواه فقط. ابدأ بملخص، ثم أهم النقاط، والأخطاء أو المخاطر، وخطوات عملية مقترحة. إذا كان كودًا فراجع الأخطاء المحتملة دون ادعاء تشغيله.
@@ -602,7 +619,7 @@ ${doc.content.slice(0,40000)}
         {section==="settings"&&<SettingsSection setMessages={setMessages} files={files} setFiles={setFiles} setNotice={setNotice} setMemories={setMemories} accountUser={accountUser} accountEmail={accountEmail} setAccountEmail={setAccountEmail} accountPassword={accountPassword} setAccountPassword={setAccountPassword} accountBusy={accountBusy} cloudMemoryStatus={cloudMemoryStatus} signOutAccount={signOutAccount} syncCloudMemory={syncCloudMemory} authenticateAccount={authenticateAccount} setConversations={setConversations} setActiveId={setActiveId} dark={dark} setDark={setDark} serviceStatus={serviceStatus} connectors={connectors} connectorsChecked={connectorsChecked} refreshConnectors={refreshConnectors} googleConnected={googleConnected} googleBusy={googleBusy} googleView={googleView} googleItems={googleItems} googleStatusMessage={googleStatusMessage} runGoogleView={runGoogleView} disconnectGoogle={disconnectGoogle} />}
       </div>
       {notice&&<div className="toast"><span>{notice}</span><button onClick={()=>setNotice("")} aria-label="إغلاق"><X size={16}/></button></div>}
-      <input ref={fileRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.json,.yaml,.yml,.md" multiple hidden onChange={e=>uploadFiles(e.target.files)}/>
+      <input ref={fileRef} type="file" multiple hidden onChange={e=>uploadFiles(e.target.files)}/>
       
     </section>
     <nav className="mobile-bottom-nav">{nav.filter(n=>["chat","agent","tasks","workspace","images"].includes(n.id)).map(n=><button key={n.id} className={section===n.id?"selected":""} onClick={()=>changeSection(n.id)}><n.icon size={19}/><span>{n.label==="توليد الصور"?"الصور":n.label==="مساحة العمل"?"الملفات":n.label==="الوكيل الذكي"?"الوكيل":n.label}</span></button>)}<button onClick={()=>setMobileNavOpen(v=>!v)}><Menu size={19}/><span>المزيد</span></button></nav>
