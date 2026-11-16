@@ -29,7 +29,7 @@ export default function AuthFetchProvider() {
         const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
         const path = new URL(url, window.location.origin);
         if (path.origin === window.location.origin && PROTECTED_PATHS.includes(path.pathname)) {
-          const token = sessionStorage.getItem("meai-access-token") || "";
+          const token = localStorage.getItem("meai-access-token") || sessionStorage.getItem("meai-access-token") || "";
           const hasAuthHeader = Boolean(init?.headers && (
             (init.headers instanceof Headers && init.headers.has("Authorization")) ||
             (Array.isArray(init.headers) && init.headers.some(([k]) => k.toLowerCase() === "authorization")) ||
