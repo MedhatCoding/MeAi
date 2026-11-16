@@ -34,6 +34,7 @@ export default function Home() {
   const [files, setFiles] = useState<string[]>([]);
   const [cloudFiles, setCloudFiles] = useState<{id:string;name:string;mime_type:string|null;storage_path:string;size_bytes:number;created_at:string}[]>([]);
   const [cloudUploadProgress, setCloudUploadProgress] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<{name:string;content:string;mimeType:string;size:number}[]>([]);
   const [documents, setDocuments] = useState<{name:string;content:string;size:number;updatedAt:string}[]>([]);
   const [artifacts, setArtifacts] = useState<{filename:string;content:string;summary:string;createdAt:string}[]>([]);
   const [artifactBusy, setArtifactBusy] = useState(false);
@@ -389,13 +390,24 @@ ${data.error.name}: ${data.error.value}` : ""));
     const sourceCards = sources?.map(({ content: _content, ...source }) => source);
     const next: Message[] = [...messages, { role: "user", content: text, time: stamp() }, { role: "assistant", content: "", time: stamp(), ...(sourceCards?.length ? { sources: sourceCards } : {}) }];
     setMessages(next); setInput(""); setBusy(true); setNotice("");
-    await streamInto(next.slice(0, -1), "", skipWebSearch);
+    const attachedDocs = pendingAttachments.filter(item => item.content).map(item => ({name:item.name,content:item.content}));
+    const unsupported = pendingAttachments.filter(item => !item.content);
+    const enrichedHistory = [...next.slice(0, -1)];
+    if (attachedDocs.length || unsupported.length) {
+      const note = [
+        ...attachedDocs.map(item => `[ملف مرفق: ${item.name}]\n${item.content}`),
+        ...unsupported.map(item => `[مرفق: ${item.name} — تم رفعه للسحابة، لكن استخراج محتواه غير مدعوم لهذا النوع حاليًا.]`),
+      ].join("\n\n");
+      if (unsupported.length) setNotice("تم إرفاق الملفات بالمحادثة. بعض الأنواع غير النصية محفوظة بالسحابة لكن لا يمكن قراءة محتواها بعد.");
+    }
+    setPendingAttachments([]);
+    await streamInto(enrichedHistory, "", skipWebSearch, attachedDocs);
   }
 
-  async function streamInto(history: Message[], prefix: string, skipWebSearch = false) {
+  async function streamInto(history: Message[], prefix: string, skipWebSearch = false, extraDocuments: {name:string;content:string}[] = []) {
     let answer = "";
     try {
-      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: history.map(m => ({role:m.role, content:m.content})), documents: documents.map(d => ({ name:d.name, content:d.content.slice(0,20000) })), skipWebSearch }) });
+      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: history.map(m => ({role:m.role, content:m.content})), documents: [...documents.map(d => ({ name:d.name, content:d.content.slice(0,20000) })), ...extraDocuments.map(d => ({name:d.name,content:d.content.slice(0,200000)}))], skipWebSearch }) });
       if (!res.ok) {
         let detail = "فشل الاتصال بخدمة الذكاء الاصطناعي.";
         try { const data = await res.json() as {error?:string}; if (data.error) detail = data.error; } catch {}
@@ -536,6 +548,7 @@ ${data.error.name}: ${data.error.value}` : ""));
   async function uploadFiles(list: FileList | null) {
     if (!list?.length) return;
     const incoming = Array.from(list);
+    const attachToChat = section === "chat";
     if (!accountToken) {
       setNotice("لرفع الملفات إلى التخزين السحابي، سجّل الدخول أولًا من الإعدادات. لم يتم حفظ أي ملف.");
       if (fileRef.current) fileRef.current.value = "";
@@ -617,6 +630,18 @@ ${data.error.name}: ${data.error.value}` : ""));
           const registered = await register.json();
           if (!register.ok) throw new Error(registered.error || "تم رفع الملف لكن تعذر تسجيله في قائمة الملفات.");
           uploaded.push(file.name);
+          if (attachToChat) {
+            const extension = file.name.split(".").pop()?.toLowerCase() || "";
+            const textLike = file.type.startsWith("text/") || ["txt","md","csv","json","yaml","yml","toml","html","xml","js","jsx","ts","tsx","py","css","sql","log","sh","env"].includes(extension);
+            let content = "";
+            if (textLike && file.size <= 1024 * 1024) {
+              try { content = (await file.text()).slice(0, 200000); }
+              catch { content = ""; }
+            }
+            setPendingAttachments(old => [...old.filter(item => item.name !== file.name), {
+              name: file.name, content, mimeType: file.type || "application/octet-stream", size: file.size,
+            }]);
+          }
         } catch (error) {
           failed.push(`${file.name}: ${error instanceof Error ? error.message : "فشل غير معروف"}`);
         }
@@ -672,7 +697,7 @@ ${doc.content.slice(0,40000)}
       {mobileNavOpen&&<button className="mobile-scrim" onClick={()=>setMobileNavOpen(false)} aria-label="إغلاق القائمة"/>}
       <div className="content-area">
         {section==="research"&&<ResearchSection researchQuery={researchQuery} setResearchQuery={setResearchQuery} researchBusy={researchBusy} researchData={researchData} busy={busy} setSection={setSection} sendMessage={sendMessage} runResearch={runResearch} />}
-        {section==="chat"&&<ChatSection messages={messages} input={input} setInput={setInput} busy={busy} endRef={endRef} fileRef={fileRef} composerMode={composerMode} setComposerMode={setComposerMode} handleSend={handleSend} />}
+        {section==="chat"&&<ChatSection messages={messages} input={input} setInput={setInput} busy={busy} endRef={endRef} fileRef={fileRef} pendingAttachments={pendingAttachments} setPendingAttachments={setPendingAttachments} composerMode={composerMode} setComposerMode={setComposerMode} handleSend={handleSend} />}
         {section==="agent"&&<AgentSection setInput={setInput} changeSection={changeSection} agentTask={agentTask} setAgentTask={setAgentTask} agentBusy={agentBusy} agentResult={agentResult} agentTools={agentTools} agentTrace={agentTrace} agentSources={agentSources} executeAgentTask={executeAgentTask} codeLanguage={codeLanguage} setCodeLanguage={setCodeLanguage} codeInput={codeInput} setCodeInput={setCodeInput} codeOutput={codeOutput} codeBusy={codeBusy} runAgentCode={runAgentCode} editPath={editPath} setEditPath={setEditPath} editInstruction={editInstruction} setEditInstruction={setEditInstruction} editBusy={editBusy} applyProjectEdit={applyProjectEdit} setNotice={setNotice} />}
         {section==="tasks"&&<TasksSection tasks={tasks} setTasks={setTasks} />}
         {section==="workspace"&&<WorkspaceSection cloudFiles={cloudFiles} setCloudFiles={setCloudFiles} cloudUploadProgress={cloudUploadProgress} fileRef={fileRef} artifacts={artifacts} setArtifacts={setArtifacts} files={files} setFiles={setFiles} documents={documents} setDocuments={setDocuments} downloadArtifact={downloadArtifact} analyzeDocument={analyzeDocument} accountToken={accountToken} setNotice={setNotice} />}
