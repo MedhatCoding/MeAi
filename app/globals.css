@@ -259,3 +259,60 @@ input, select, textarea, .form-card input, .form-card select,
   .mobile-bottom-nav button { min-height: 58px; font-size: 12px; }
   .mobile-bottom-nav button svg { width: 22px; height: 22px; }
 }
+
+
+/* ===== تحسين إضافي لحجم الواجهة وسهولة القراءة ===== */
+html { font-size: 17px; }
+body { font-size: 17px; line-height: 1.75; }
+.topbar { min-height: 76px; }
+.crumb { font-size: 15px; }
+.brand-copy b, .connection b, .profile-row b { font-size: 16px; }
+.brand-copy span, .connection small, .profile-row small { font-size: 13px; }
+.nav-item, .chat-item, .recent-chat, .new-chat { font-size: 15px; }
+.page-heading h1, .section-hero .hero-copy h1 { font-size: clamp(29px, 2.1vw, 36px); }
+.page-heading p, .hero-copy p, .welcome-sub { font-size: 15px; }
+.message-text, .result-text { font-size: 17px; line-height: 2; }
+.primary-btn, .secondary-btn { min-height: 52px; padding: 14px 20px; font-size: 15px; border-radius: 13px; }
+.icon-btn { width: 48px; height: 48px; }
+.nav-item, .chat-item, .recent-chat { min-height: 50px; padding-block: 13px; }
+.form-card, .list-card, .settings-card { padding: 24px; }
+.form-card label, .setting-copy b, .list-header h3, .subheading h3 { font-size: 16px; }
+.form-card textarea, .form-card select, .form-card input, .auth-grid input { font-size: 16px; }
+.task-row, .file-row, .memory-row { min-height: 54px; font-size: 15px; }
+.setting-copy small, .card-sub, .hint-line, .status-line { font-size: 14px; line-height: 1.9; }
+.suggestion-card { min-height: 76px; padding: 18px; }
+.suggestion-card > span { font-size: 15px; }
+.composer { padding: 16px 17px 14px; }
+.composer textarea { font-size: 17px; min-height: 62px; }
+.send-btn { width: 50px; height: 50px; }
+.tool-btn, .mode-chip, .choice { min-height: 48px; padding: 11px 14px; font-size: 14px; }
+.mobile-bottom-nav button { min-height: 60px; font-size: 12px; }
+@media (max-width: 650px) {
+  html { font-size: 17px; }
+  body { font-size: 17px; }
+  .topbar { min-height: calc(74px + env(safe-area-inset-top)); }
+  .crumb { font-size: 17px; }
+  .content-area { padding-inline: 19px; }
+  .section-page { padding-top: 26px; }
+  .page-heading h1, .section-hero .hero-copy h1, .hero-copy h1 { font-size: 28px; }
+  .page-heading p, .hero-copy p, .welcome-sub { font-size: 16px; line-height: 1.95; }
+  .welcome-wrap h1 { font-size: clamp(32px, 8.5vw, 38px); }
+  .message-text, .result-text { font-size: 17px; line-height: 2; }
+  .primary-btn, .secondary-btn { min-height: 54px; padding: 14px 18px; font-size: 16px; }
+  .icon-btn { width: 50px; height: 50px; }
+  .nav-item, .chat-item, .recent-chat, .new-chat { min-height: 52px; font-size: 16px; }
+  .form-card, .list-card, .settings-card { padding: 21px; }
+  .form-card label, .field-label, .setting-copy b { font-size: 16px; }
+  .form-card textarea { min-height: 140px; font-size: 17px !important; }
+  .form-card select, .form-card input, .auth-grid input { min-height: 52px; font-size: 17px !important; }
+  .task-row, .file-row, .memory-row { min-height: 56px; font-size: 15px; }
+  .setting-copy small, .card-sub, .hint-line, .empty-inline, .status-line { font-size: 14px; }
+  .suggestion-card { min-height: 80px; padding: 17px; }
+  .suggestion-card > span { font-size: 15px; }
+  .composer { padding: 16px; }
+  .composer textarea { min-height: 70px; font-size: 18px !important; }
+  .send-btn { width: 52px; height: 52px; }
+  .tool-btn, .mode-chip, .choice { min-height: 48px; font-size: 14px; }
+  .mobile-bottom-nav { min-height: calc(68px + env(safe-area-inset-bottom)); }
+  .mobile-bottom-nav button { min-height: 62px; font-size: 13px; }
+}
