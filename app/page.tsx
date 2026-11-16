@@ -169,14 +169,26 @@ export default function Home() {
   useEffect(() => { document.documentElement.dataset.theme = dark ? "dark" : "light"; if (typeof window !== "undefined") localStorage.setItem("medhat-theme", dark ? "dark" : "light"); }, [dark]);
 
   async function requestAgentExecution(task: string) {
-    const payload = { task, documents: documents.map(d => ({ name: d.name, content: d.content.slice(0, 40000) })) };
+    // Keep code-execution approval only for the current conversation and browser tab.
+    const approvalKey = "meai-code-execution-approved:" + (activeId || "agent-session");
+    let codeExecutionConfirmed = false;
+    try { codeExecutionConfirmed = sessionStorage.getItem(approvalKey) === "true"; } catch {}
+    const payload = {
+      task,
+      documents: documents.map(d => ({ name: d.name, content: d.content.slice(0, 40000) })),
+      ...(codeExecutionConfirmed ? { codeExecutionConfirmed: true } : {}),
+    };
     let response = await fetch("/api/agent/execute", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
     });
     let data = await response.json();
     if (response.status === 428 && data.requiresCodeExecutionConfirmation) {
-      const approved = window.confirm("الوكيل يحتاج تشغيل كود Python مولّد داخل مختبر E2B مؤقت. اتصال الإنترنت الخارجي معطّل، والبيئة تُغلق بعد التنفيذ. هل توافق على التشغيل؟");
-      if (!approved) throw new Error("تم إلغاء تشغيل الكود بناءً على اختيارك.");
+      if (!codeExecutionConfirmed) {
+        const approved = window.confirm("الوكيل يحتاج تشغيل كود Python مولّد داخل مختبر E2B مؤقت. الإنترنت الخارجي معطّل، والبيئة تُغلق بعد التنفيذ. موافقتك ستسري على تشغيلات الكود داخل هذه المحادثة فقط، حتى تغلق المحادثة أو تبدأ محادثة جديدة. هل توافق؟");
+        if (!approved) throw new Error("تم إلغاء تشغيل الكود بناءً على اختيارك.");
+        codeExecutionConfirmed = true;
+        try { sessionStorage.setItem(approvalKey, "true"); } catch {}
+      }
       response = await fetch("/api/agent/execute", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...payload, codeExecutionConfirmed: true }),
