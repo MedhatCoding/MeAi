@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Upload } from "tus-js-client";
 import { ChevronDown, CircleHelp, Menu, MessageCircle, MoreHorizontal, ShieldCheck, Sparkles, SquarePen, Trash2, X, PanelLeftClose, PanelLeft, Sun, Moon } from "lucide-react";
 import { nav, readConversations } from "./lib/shared";
 import type { AgentSource, AgentTraceItem, ChatMode, Message, ResearchResult, Section } from "./lib/shared";
@@ -31,6 +32,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [files, setFiles] = useState<string[]>([]);
+  const [cloudFiles, setCloudFiles] = useState<{id:string;name:string;mime_type:string|null;storage_path:string;size_bytes:number;created_at:string}[]>([]);
+  const [cloudUploadProgress, setCloudUploadProgress] = useState("");
   const [documents, setDocuments] = useState<{name:string;content:string;size:number;updatedAt:string}[]>([]);
   const [artifacts, setArtifacts] = useState<{filename:string;content:string;summary:string;createdAt:string}[]>([]);
   const [artifactBusy, setArtifactBusy] = useState(false);
@@ -86,6 +89,18 @@ export default function Home() {
     const active = convs.find(c => c.id === savedActive) || convs[0];
     if (active) { setActiveId(active.id); setMessages(active.messages); }
     try { setDark(localStorage.getItem("medhat-theme") !== "light"); setFiles(JSON.parse(localStorage.getItem("medhat-files-v1") || "[]") as string[]); setDocuments(JSON.parse(localStorage.getItem("medhat-documents-v1") || "[]") as {name:string;content:string;size:number;updatedAt:string}[]); setArtifacts(JSON.parse(localStorage.getItem("medhat-artifacts-v1") || "[]") as {filename:string;content:string;summary:string;createdAt:string}[]); setMemories(JSON.parse(localStorage.getItem("medhat-memory-v1") || "[]") as string[]); setTasks(JSON.parse(localStorage.getItem("medhat-tasks-v1") || JSON.stringify([{title:"مراجعة المشروع واكتشاف الأخطاء",done:false},{title:"تحسين واجهة Medhat AI",done:true}])) as {title:string;done:boolean}[]); } catch {} }, []);
+  async function refreshCloudFiles(token = accountToken) {
+    if (!token) { setCloudFiles([]); return; }
+    try {
+      const response = await fetch("/api/account/storage", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "تعذر تحميل ملفات السحابة.");
+      setCloudFiles(Array.isArray(data.files) ? data.files : []);
+    } catch (error) {
+      setCloudMemoryStatus(error instanceof Error ? error.message : "تعذر تحميل ملفات السحابة.");
+    }
+  }
+  useEffect(() => { if (accountToken) void refreshCloudFiles(accountToken); }, [accountToken]);
   useEffect(() => { fetch("/api/status", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(data => { if (data) setServiceStatus(data); }).catch(() => setServiceStatus(null)); void refreshConnectors(); void refreshGoogleStatus(); }, []);
   async function refreshConnectors() { setConnectorsChecked(false); try { const response = await fetch("/api/integrations", { cache: "no-store" }); const data = await response.json(); setConnectors(Array.isArray(data.connectors) ? data.connectors : []); } catch { setConnectors([]); } finally { setConnectorsChecked(true); } }
   async function refreshGoogleStatus() { try { const response = await fetch("/api/integrations/google?view=status", {cache:"no-store"}); const data = await response.json(); setGoogleConnected(Boolean(response.ok && data.connected)); } catch { setGoogleConnected(false); } }
@@ -458,16 +473,70 @@ ${data.error.name}: ${data.error.value}` : ""));
 
   async function uploadFiles(list: FileList | null) {
     if (!list?.length) return;
-    const supported = /\.(txt|md|csv|json|ya?ml|toml|html?|xml|js|jsx|ts|tsx|py|css|sql|log)$/i;
     const incoming = Array.from(list);
+    if (accountToken) {
+      setCloudUploadProgress("");
+      let completed = 0;
+      const skipped: string[] = [];
+      try {
+        const configResponse = await fetch("/api/account/storage", { headers: { Authorization: `Bearer ${accountToken}` }, cache: "no-store" });
+        const config = await configResponse.json();
+        if (!configResponse.ok || !config.uploadEndpoint || !config.anonKey || !config.userId) throw new Error(config.error || "تعذر تهيئة التخزين السحابي.");
+        for (const file of incoming) {
+          if (file.size > 50 * 1024 * 1024) { skipped.push(file.name + " (أكبر من 50MB)"); continue; }
+          const safeName = file.name.replace(/[^\\p{L}\\p{N}._-]/gu, "_").slice(-180) || "file";
+          const path = `${config.userId}/${crypto.randomUUID()}-${safeName}`;
+          setCloudUploadProgress(`رفع ${file.name} • 0%`);
+          await new Promise<void>((resolve, reject) => {
+            const upload = new Upload(file, {
+              endpoint: config.uploadEndpoint,
+              retryDelays: [0, 3000, 5000, 10000, 20000],
+              headers: { authorization: `Bearer ${accountToken}`, apikey: config.anonKey },
+              uploadDataDuringCreation: true,
+              removeFingerprintOnSuccess: true,
+              chunkSize: 6 * 1024 * 1024,
+              metadata: {
+                bucketName: "meai-files",
+                objectName: path,
+                contentType: file.type || "application/octet-stream",
+                cacheControl: "3600",
+              },
+              onError: reject,
+              onProgress: (uploaded, total) => setCloudUploadProgress(`رفع ${file.name} • ${Math.floor(uploaded / Math.max(1,total) * 100)}%`),
+              onSuccess: () => resolve(),
+            });
+            void upload.findPreviousUploads().then(previous => {
+              if (previous.length) upload.resumeFromPreviousUpload(previous[0]);
+              upload.start();
+            }).catch(reject);
+          });
+          const register = await fetch("/api/account/storage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
+            body: JSON.stringify({ action: "register", name: file.name, path, mimeType: file.type || "application/octet-stream", size: file.size }),
+          });
+          const registered = await register.json();
+          if (!register.ok) throw new Error(registered.error || `تم رفع ${file.name} لكن تعذر تسجيله.`);
+          completed++;
+        }
+        await refreshCloudFiles(accountToken);
+        setCloudUploadProgress("");
+        setNotice(`تم رفع ${completed} ملف إلى التخزين السحابي.${skipped.length ? " تم تخطي: " + skipped.join("، ") : ""}`);
+      } catch (error) {
+        setCloudUploadProgress("");
+        setNotice(error instanceof Error ? error.message : "تعذر رفع الملفات إلى السحابة.");
+        await refreshCloudFiles(accountToken);
+      }
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+
+    const supported = /\\.(txt|md|csv|json|ya?ml|toml|html?|xml|js|jsx|ts|tsx|py|css|sql|log)$/i;
     const accepted = incoming.filter(file => supported.test(file.name) && file.size <= 2_000_000);
     const skipped = incoming.length - accepted.length;
     const parsed: {name:string;content:string;size:number;updatedAt:string}[] = [];
     for (const file of accepted) {
-      try {
-        const content = (await file.text()).slice(0, 40_000);
-        parsed.push({name:file.name,content,size:file.size,updatedAt:new Date().toISOString()});
-      } catch { /* ignore unreadable file */ }
+      try { parsed.push({name:file.name,content:(await file.text()).slice(0,40_000),size:file.size,updatedAt:new Date().toISOString()}); } catch {}
     }
     const mergedDocs = [...documents.filter(d => !parsed.some(p => p.name === d.name)), ...parsed].slice(-40);
     try {
@@ -475,10 +544,9 @@ ${data.error.name}: ${data.error.value}` : ""));
       const names = [...new Set([...files, ...incoming.map(file=>file.name)])].slice(-200);
       localStorage.setItem("medhat-files-v1", JSON.stringify(names));
       setDocuments(mergedDocs); setFiles(names);
-      setNotice(`تمت قراءة محتوى ${parsed.length} ملف وحفظه على هذا الجهاز.${skipped ? ` تم تخطي ${skipped} ملف: الأنواع المدعومة نصية فقط وبحد أقصى 2MB للملف.` : ""}`);
-    } catch {
-      setNotice("مساحة التخزين المحلية ممتلئة. قلّل عدد الملفات أو أحجامها ثم أعد المحاولة.");
-    }
+      setNotice(`تمت قراءة محتوى ${parsed.length} ملف وحفظه محليًا.${skipped ? ` تم تخطي ${skipped} ملف: سجّل الدخول لرفع الملفات الثنائية أو الأكبر.` : ""}`);
+    } catch { setNotice("مساحة التخزين المحلية ممتلئة. سجّل الدخول لاستخدام التخزين السحابي."); }
+    if (fileRef.current) fileRef.current.value = "";
   }
   function analyzeDocument(doc:{name:string;content:string}) {
     const prompt = `حلّل الملف التالي اعتمادًا على محتواه فقط. ابدأ بملخص، ثم أهم النقاط، والأخطاء أو المخاطر، وخطوات عملية مقترحة. إذا كان كودًا فراجع الأخطاء المحتملة دون ادعاء تشغيله.
@@ -514,7 +582,7 @@ ${doc.content.slice(0,40000)}
         {section==="chat"&&<ChatSection messages={messages} input={input} setInput={setInput} busy={busy} endRef={endRef} fileRef={fileRef} composerMode={composerMode} setComposerMode={setComposerMode} handleSend={handleSend} />}
         {section==="agent"&&<AgentSection setInput={setInput} changeSection={changeSection} agentTask={agentTask} setAgentTask={setAgentTask} agentBusy={agentBusy} agentResult={agentResult} agentTools={agentTools} agentTrace={agentTrace} agentSources={agentSources} executeAgentTask={executeAgentTask} codeLanguage={codeLanguage} setCodeLanguage={setCodeLanguage} codeInput={codeInput} setCodeInput={setCodeInput} codeOutput={codeOutput} codeBusy={codeBusy} runAgentCode={runAgentCode} editPath={editPath} setEditPath={setEditPath} editInstruction={editInstruction} setEditInstruction={setEditInstruction} editBusy={editBusy} applyProjectEdit={applyProjectEdit} setNotice={setNotice} />}
         {section==="tasks"&&<TasksSection tasks={tasks} setTasks={setTasks} />}
-        {section==="workspace"&&<WorkspaceSection fileRef={fileRef} artifacts={artifacts} setArtifacts={setArtifacts} files={files} setFiles={setFiles} documents={documents} setDocuments={setDocuments} downloadArtifact={downloadArtifact} analyzeDocument={analyzeDocument} accountToken={accountToken} setNotice={setNotice} />}
+        {section==="workspace"&&<WorkspaceSection cloudFiles={cloudFiles} setCloudFiles={setCloudFiles} cloudUploadProgress={cloudUploadProgress} fileRef={fileRef} artifacts={artifacts} setArtifacts={setArtifacts} files={files} setFiles={setFiles} documents={documents} setDocuments={setDocuments} downloadArtifact={downloadArtifact} analyzeDocument={analyzeDocument} accountToken={accountToken} setNotice={setNotice} />}
         {section==="images"&&<ImagesSection setNotice={setNotice} imagePrompt={imagePrompt} setImagePrompt={setImagePrompt} imageAspect={imageAspect} setImageAspect={setImageAspect} imageStyle={imageStyle} setImageStyle={setImageStyle} imageBusy={imageBusy} setImageBusy={setImageBusy} generatedImage={generatedImage} setGeneratedImage={setGeneratedImage} />}
         {section==="video"&&<VideoSection setNotice={setNotice} />}
         {section==="memory"&&<MemorySection memories={memories} setMemories={setMemories} addMemory={addMemory} />}
