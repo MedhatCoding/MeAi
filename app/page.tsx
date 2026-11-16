@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Upload } from "tus-js-client";
+import * as tus from "tus-js-client";
 import { ChevronDown, CircleHelp, Menu, MessageCircle, MoreHorizontal, ShieldCheck, Sparkles, SquarePen, Trash2, X, PanelLeftClose, PanelLeft, Sun, Moon } from "lucide-react";
 import { nav, readConversations } from "./lib/shared";
 import type { AgentSource, AgentTraceItem, ChatMode, Message, ResearchResult, Section } from "./lib/shared";
@@ -488,7 +488,7 @@ ${data.error.name}: ${data.error.value}` : ""));
           const path = `${config.userId}/${crypto.randomUUID()}-${safeName}`;
           setCloudUploadProgress(`رفع ${file.name} • 0%`);
           await new Promise<void>((resolve, reject) => {
-            const upload = new Upload(file, {
+            const upload = new tus.Upload(file, {
               endpoint: config.uploadEndpoint,
               retryDelays: [0, 3000, 5000, 10000, 20000],
               headers: { authorization: `Bearer ${accountToken}`, apikey: config.anonKey },
