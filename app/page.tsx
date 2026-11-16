@@ -448,7 +448,7 @@ ${data.error.name}: ${data.error.value}` : ""));
     setConversations(next); setActiveId(id); setMessages([]);
     persistConversations(next);
     try { localStorage.setItem("medhat-active-chat-v1", id); } catch {}
-    setSection("chat"); setMobileNavOpen(false); setNotice("");
+    setSection("chat"); setSidebarOpen(false); setMobileNavOpen(false); setNotice("");
   }
 
   function switchConversation(id: string) {
@@ -576,7 +576,7 @@ ${doc.content.slice(0,40000)}
     if (!value?.trim()) return;
     const next = [...memories, value.trim()]; setMemories(next); localStorage.setItem("medhat-memory-v1", JSON.stringify(next));
   }
-  function changeSection(id: Section) { setSection(id); setMobileNavOpen(false); setNotice(""); }
+  function changeSection(id: Section) { setSection(id); setSidebarOpen(false); setMobileNavOpen(false); setNotice(""); }
 
   return <main className={`app-shell ${dark ? "dark" : "light"}`}>
     {(sidebarOpen || mobileNavOpen) && <aside className={`sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
@@ -602,7 +602,7 @@ ${doc.content.slice(0,40000)}
         {section==="settings"&&<SettingsSection setMessages={setMessages} files={files} setFiles={setFiles} setNotice={setNotice} setMemories={setMemories} accountUser={accountUser} accountEmail={accountEmail} setAccountEmail={setAccountEmail} accountPassword={accountPassword} setAccountPassword={setAccountPassword} accountBusy={accountBusy} cloudMemoryStatus={cloudMemoryStatus} signOutAccount={signOutAccount} syncCloudMemory={syncCloudMemory} authenticateAccount={authenticateAccount} setConversations={setConversations} setActiveId={setActiveId} dark={dark} setDark={setDark} serviceStatus={serviceStatus} connectors={connectors} connectorsChecked={connectorsChecked} refreshConnectors={refreshConnectors} googleConnected={googleConnected} googleBusy={googleBusy} googleView={googleView} googleItems={googleItems} googleStatusMessage={googleStatusMessage} runGoogleView={runGoogleView} disconnectGoogle={disconnectGoogle} />}
       </div>
       {notice&&<div className="toast"><span>{notice}</span><button onClick={()=>setNotice("")} aria-label="إغلاق"><X size={16}/></button></div>}
-      <input ref={fileRef} type="file" multiple hidden onChange={e=>uploadFiles(e.target.files)}/>
+      <input ref={fileRef} type="file" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.json,.yaml,.yml,.md" multiple hidden onChange={e=>uploadFiles(e.target.files)}/>
       
     </section>
     <nav className="mobile-bottom-nav">{nav.filter(n=>["chat","agent","tasks","workspace","images"].includes(n.id)).map(n=><button key={n.id} className={section===n.id?"selected":""} onClick={()=>changeSection(n.id)}><n.icon size={19}/><span>{n.label==="توليد الصور"?"الصور":n.label==="مساحة العمل"?"الملفات":n.label==="الوكيل الذكي"?"الوكيل":n.label}</span></button>)}<button onClick={()=>setMobileNavOpen(v=>!v)}><Menu size={19}/><span>المزيد</span></button></nav>
