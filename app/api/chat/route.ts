@@ -2,6 +2,7 @@ import { rejectCrossOrigin, enforceRateLimit } from "../_lib/guard";
 import { enforceApiAccess } from "../_lib/api-access";
 import { NextRequest } from "next/server";
 import { searchWeb, type WebSearchResult } from "../_lib/web-search";
+import { getModelConfig, type ModelConfig } from "../_lib/model-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,13 +13,7 @@ function jsonError(message: string, status: number) {
   return Response.json({ error: message }, { status });
 }
 
-type ModelConfig = { endpoint: string; token: string; model: string };
-function getModelConfig(): ModelConfig | null {
- const id=process.env.CLOUDFLARE_ACCOUNT_ID,key=process.env.CLOUDFLARE_API_TOKEN;
- if(id&&key)return {endpoint:"https://api.cloudflare.com/client/v4/accounts/"+id+"/ai/v1/chat/completions",token:key,model:process.env.CLOUDFLARE_MODEL||"@cf/meta/llama-3.1-8b-instruct"};
- const base=process.env.OPENAI_BASE_URL,apiKey=process.env.OPENAI_API_KEY,model=process.env.OPENAI_MODEL;
- return base&&apiKey&&model?{endpoint:base.replace(/\/+$/,"")+"/chat/completions",token:apiKey,model}:null;
-}
+
 type RequestPlan={intent:string;needsSearch:boolean;searchQueries:string[];freshness:string;reason:string};
 function fallbackPlan(q:string):RequestPlan {
  const chat=/^(hi|hello|hey|thanks|thank you|السلام عليكم|اهلا|أهلا|ازيك|إزيك|شكرا|شكرًا|تمام|ماشي|حاضر|عرف نفسك)[.!؟?\s]*$/i.test(q);
