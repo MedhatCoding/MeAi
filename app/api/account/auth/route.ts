@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   const rateError = enforceRateLimit(request, "account-auth", 8);
   if (rateError) return rateError;
 
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, "");
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\\/+$/, "");
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!base || !anonKey) return fail("تسجيل الدخول السحابي غير مهيأ؛ أضف إعدادات Supabase إلى الخادم.", 503);
 
@@ -28,12 +28,17 @@ export async function POST(request: NextRequest) {
     action = body.action;
     email = body.email.trim().toLowerCase();
     password = body.password;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return fail("صيغة البريد الإلكتروني غير صحيحة.", 400);
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) return fail("صيغة البريد الإلكتروني غير صحيحة.", 400);
     if (password.length < 8 || password.length > 256) return fail("كلمة المرور يجب أن تكون بين 8 و256 حرفًا.", 400);
   } catch { return fail("تعذر قراءة بيانات الحساب.", 400); }
 
   try {
-    const url = action === "signup" ? `${base}/auth/v1/signup` : `${base}/auth/v1/token?grant_type=password`;
+    // Supabase uses redirect_to after email confirmation. Never fall back to localhost
+    // in production: prefer the configured canonical site URL, then the request origin.
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).trim().replace(/\\/+$/, "");
+    const signupUrl = new URL(`${base}/auth/v1/signup`);
+    signupUrl.searchParams.set("redirect_to", `${siteUrl}/?emailConfirmed=1`);
+    const url = action === "signup" ? signupUrl.toString() : `${base}/auth/v1/token?grant_type=password`;
     const response = await fetch(url, {
       method: "POST",
       headers: { apikey: anonKey, "Content-Type": "application/json" },
