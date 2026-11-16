@@ -14,9 +14,9 @@ function objectPath(path: string) {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 async function authenticate(request: NextRequest) {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\\/+$/, "");
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/+$/, "");
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const match = (request.headers.get("authorization") || "").match(/^Bearer\\s+(.+)$/i);
+  const match = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
   if (!base || !anonKey || !match) return null;
   try {
     const response = await fetch(`${base}/auth/v1/user`, {
@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
     const response = await fetch(url, { headers: { ...headers(session), Accept: "application/json" }, cache: "no-store" });
     if (!response.ok) return fail("تعذر تحميل قائمة الملفات من قاعدة البيانات.", 502);
     const files = await response.json();
-    return Response.json({ ok: true, files }, { headers: { "Cache-Control": "no-store" } });
+    const projectRef = new URL(session.base).hostname.split(".")[0];
+    return Response.json({ ok: true, files, userId: session.userId, anonKey: session.anonKey, uploadEndpoint: `https://${projectRef}.storage.supabase.co/storage/v1/upload/resumable` }, { headers: { "Cache-Control": "no-store" } });
   } catch { return fail("تعذر الاتصال بمخزن الملفات.", 502); }
 }
 
