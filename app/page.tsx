@@ -25,7 +25,7 @@ export default function Home() {
   const [researchQuery, setResearchQuery] = useState("");
   const [researchBusy, setResearchBusy] = useState(false);
   const [researchData, setResearchData] = useState<ResearchResult[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [dark, setDark] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -498,7 +498,7 @@ ${doc.content.slice(0,40000)}
   function changeSection(id: Section) { setSection(id); setMobileNavOpen(false); setNotice(""); }
 
   return <main className={`app-shell ${dark ? "dark" : "light"}`}>
-    {sidebarOpen && <aside className={`sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
+    {(sidebarOpen || mobileNavOpen) && <aside className={`sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
       <div className="brand-row"><div className="brand-mark"><Sparkles size={20}/></div><div className="brand-copy"><b>Medhat AI</b><span>مساعدك الذكي</span></div><button className="icon-btn collapse-btn" aria-label="إخفاء القائمة" onClick={() => setSidebarOpen(false)}><PanelLeftClose size={18}/></button></div>
       <button className="new-chat" onClick={() => { newChat(); }}><SquarePen size={17}/> محادثة جديدة <span>⌘ K</span></button>
       <div className="nav-scroll">{["الرئيسية","الأدوات","النظام"].map(group => <div className="nav-group" key={group}><div className="group-label">{group}</div>{nav.filter(n=>n.group===group).map(n=><button key={n.id} className={`nav-item ${section===n.id?"active":""}`} onClick={()=>changeSection(n.id)}><n.icon size={18}/><span>{n.label}</span>{n.id==="agent"&&<i className="nav-dot"/>}</button>)}</div>)}
