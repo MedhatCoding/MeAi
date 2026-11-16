@@ -90,7 +90,7 @@ export default function SettingsSection({
           <div className="action-row"><button className="primary-btn" disabled={accountBusy||!accountEmail.trim()||accountPassword.length<8} onClick={()=>void authenticateAccount("login")}>{accountBusy?"جارٍ التنفيذ…":"تسجيل الدخول"}</button><button className="secondary-btn" disabled={accountBusy||!accountEmail.trim()||accountPassword.length<8} onClick={()=>void authenticateAccount("signup")}>إنشاء حساب</button></div>
         </div>}
         {cloudMemoryStatus?<p role="status" className="status-line">{cloudMemoryStatus}</p>:null}
-        <p className="hint-line">يتطلب هذا القسم ضبط NEXT_PUBLIC_SUPABASE_URL وNEXT_PUBLIC_SUPABASE_ANON_KEY وتطبيق ملف supabase/migrations/20261029_meai_cloud_memory.sql. لا تُرفع البيانات تلقائيًا دون ضغطك على الحفظ.</p>
+        <p className="hint-line">تم إعداد Supabase وتطبيق سياسات RLS على جداول البيانات. أنشئ حسابًا لتفعيل المزامنة بين الأجهزة؛ لا تُرفع بياناتك تلقائيًا دون ضغطك على الحفظ.</p>
       </div>
       <div className="settings-card">
         <div className="list-header"><h3>الواجهة والخصوصية</h3></div>
