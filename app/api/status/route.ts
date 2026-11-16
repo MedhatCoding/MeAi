@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   const modelConfig = getModelConfig();
   const configuredModelProviders = getConfiguredModelProviders();
-  const provider = modelConfig?.provider === "cloudflare" ? "Cloudflare Workers AI" : modelConfig?.provider === "openai-compatible" ? "OpenAI-compatible API" : null;
+  const provider = modelConfig?.provider === "cloudflare" ? "Cloudflare Workers AI" : modelConfig?.provider === "gemini" ? "Google Gemini API" : modelConfig?.provider === "groq" ? "Groq API" : modelConfig?.provider === "openai-compatible" ? "OpenAI-compatible API" : null;
   const githubConfigured = Boolean(process.env.GITHUB_TOKEN);
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   const searchProviders = [
