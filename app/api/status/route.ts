@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
       webSearchProviders: searchProviders,
       // Config presence is not equivalent to authentication or durable per-user storage.
       persistentCloudMemory: supabaseConfigured,
+      cloudFileStorage: supabaseConfigured,
       githubConfigured,
       githubSourceEditing: Boolean(githubConfigured && process.env.MEAI_AGENT_EDIT_ENABLED === "true"),
       googleOAuthConfigured,
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
       github: githubConfigured ? "token_configured_identity_and_repository_access_must_be_checked" : "missing_token",
       githubSourceEditing: process.env.MEAI_AGENT_EDIT_ENABLED === "true" && githubConfigured ? "explicitly_enabled" : "disabled_by_default",
       cloudMemory: supabaseConfigured ? "supabase_project_configured_rls_verified_account_auth_required_for_sync" : "missing_supabase_config",
+      cloudFileStorage: supabaseConfigured ? "private_bucket_configured_resumable_uploads_up_to_50mb_per_file_account_required" : "missing_supabase_config",
       google: googleOAuthConfigured ? "oauth_flow_implemented_account_consent_required_and_google_apis_must_be_enabled" : "missing_oauth_configuration",
     },
   }, { headers: { "Cache-Control": "no-store" } });
