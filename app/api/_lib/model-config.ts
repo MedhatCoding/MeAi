@@ -1,4 +1,4 @@
-export type ModelConfig = { provider: "cloudflare" | "openai-compatible"; endpoint: string; token: string; model: string };
+export type ModelConfig = { provider: "cloudflare" | "openai-compatible" | "gemini" | "groq"; endpoint: string; token: string; model: string };
 
 export function getModelConfig(): ModelConfig | null {
   const cloudflareId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -10,25 +10,46 @@ export function getModelConfig(): ModelConfig | null {
     model: process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.1-8b-instruct",
   } : null;
 
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const gemini: ModelConfig | null = geminiKey ? {
+    provider: "gemini",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    token: geminiKey,
+    model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
+  } : null;
+
+  const groqKey = process.env.GROQ_API_KEY;
+  const groq: ModelConfig | null = groqKey ? {
+    provider: "groq",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    token: groqKey,
+    model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+  } : null;
+
   const base = process.env.OPENAI_BASE_URL;
   const key = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL;
   const compatible: ModelConfig | null = base && key && model ? {
     provider: "openai-compatible",
-    endpoint: base.replace(/\/+$/, "") + "/chat/completions",
+    endpoint: base.replace(/\\/+$/, "") + "/chat/completions",
     token: key,
     model,
   } : null;
 
-  // Explicit preference only; default remains Cloudflare for backward compatibility.
-  return process.env.MEAI_MODEL_PROVIDER === "openai-compatible"
-    ? compatible || cloudflare
-    : cloudflare || compatible;
+  const providers: Record<string, ModelConfig | null> = {
+    cloudflare, gemini, groq, "openai-compatible": compatible,
+  };
+  const preference = process.env.MEAI_MODEL_PROVIDER;
+  if (preference && providers[preference]) return providers[preference] || cloudflare || gemini || groq || compatible;
+  // Prefer the existing provider for compatibility, then free-tier alternatives.
+  return cloudflare || gemini || groq || compatible;
 }
 
 export function getConfiguredModelProviders(): string[] {
   const providers: string[] = [];
   if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) providers.push("cloudflare");
+  if (process.env.GEMINI_API_KEY) providers.push("gemini");
+  if (process.env.GROQ_API_KEY) providers.push("groq");
   if (process.env.OPENAI_BASE_URL && process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL) providers.push("openai-compatible");
   return providers;
 }
