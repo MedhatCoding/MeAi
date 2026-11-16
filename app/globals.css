@@ -184,3 +184,6 @@ button, input, textarea, select { font-size: inherit; }
   .suggestion-grid { grid-template-columns: 1fr; }
   .mobile-bottom-nav button { font-size: 10px; }
 }
+
+@media(max-width:650px){.desktop-sidebar-toggle{display:none!important}}
+@media(min-width:651px){.mobile-menu{display:none!important}}
