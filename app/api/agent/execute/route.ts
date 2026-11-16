@@ -4,6 +4,7 @@ import { planAgentTools } from "../../_lib/agent-planner";
 import { searchWeb } from "../../_lib/web-search";
 import { NextRequest } from "next/server";
 import { Sandbox } from "@e2b/code-interpreter";
+import { getModelConfig } from "../../_lib/model-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,20 +65,9 @@ export async function POST(request: NextRequest) {
     }
   } catch { return fail("تعذر قراءة الطلب.", 400); }
 
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const cloudflareToken = process.env.CLOUDFLARE_API_TOKEN;
-  const base = process.env.OPENAI_BASE_URL;
-  const key = process.env.OPENAI_API_KEY;
-  const openAiModel = process.env.OPENAI_MODEL;
-  let endpoint = "", token = "", model = "";
-  if (accountId && cloudflareToken) {
-    endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/chat/completions`;
-    token = cloudflareToken;
-    model = process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.1-8b-instruct";
-  } else if (base && key && openAiModel) {
-    endpoint = `${base.replace(/\/+$/, "")}/chat/completions`;
-    token = key; model = openAiModel;
-  } else return fail("خدمة الذكاء الاصطناعي غير مهيأة على الاستضافة.", 503);
+  const modelConfig = getModelConfig();
+  if (!modelConfig) return fail("خدمة الذكاء الاصطناعي غير مهيأة على الاستضافة.", 503);
+  const { endpoint, token, model } = modelConfig;
 
   const agentPlan = await planAgentTools({ task, documentCount: documents.length, endpoint, token, model });
   const wantsSearch = agentPlan.tools.includes("web_search");
