@@ -35,7 +35,8 @@ export async function POST(request: NextRequest) {
   try {
     // Supabase uses redirect_to after email confirmation. Never fall back to localhost
     // in production: prefer the configured canonical site URL, then the request origin.
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).trim().replace(/\\/+$/, "");
+    let siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).trim();
+    while (siteUrl.endsWith("/")) siteUrl = siteUrl.slice(0, -1);
     const signupUrl = new URL(`${base}/auth/v1/signup`);
     signupUrl.searchParams.set("redirect_to", `${siteUrl}/?emailConfirmed=1`);
     const url = action === "signup" ? signupUrl.toString() : `${base}/auth/v1/token?grant_type=password`;
