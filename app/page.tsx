@@ -474,19 +474,29 @@ ${data.error.name}: ${data.error.value}` : ""));
   async function uploadFiles(list: FileList | null) {
     if (!list?.length) return;
     const incoming = Array.from(list);
-    if (accountToken) {
-      setCloudUploadProgress("");
-      let completed = 0;
-      const skipped: string[] = [];
-      try {
-        const configResponse = await fetch("/api/account/storage", { headers: { Authorization: `Bearer ${accountToken}` }, cache: "no-store" });
-        const config = await configResponse.json();
-        if (!configResponse.ok || !config.uploadEndpoint || !config.anonKey || !config.userId) throw new Error(config.error || "تعذر تهيئة التخزين السحابي.");
-        for (const file of incoming) {
-          if (file.size > 50 * 1024 * 1024) { skipped.push(file.name + " (أكبر من 50MB)"); continue; }
-          const safeName = file.name.replace(/[^\\p{L}\\p{N}._-]/gu, "_").slice(-180) || "file";
-          const path = `${config.userId}/${crypto.randomUUID()}-${safeName}`;
-          setCloudUploadProgress(`رفع ${file.name} • 0%`);
+    if (!accountToken) {
+      setNotice("لرفع الصور وملفات PDF والملفات الكبيرة، سجّل الدخول أولًا من الإعدادات. لم يتم حفظ هذه الملفات.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
+
+    setCloudUploadProgress("");
+    let completed = 0;
+    const skipped: string[] = [];
+    try {
+      const configResponse = await fetch("/api/account/storage", { headers: { Authorization: `Bearer ${accountToken}` }, cache: "no-store" });
+      const config = await configResponse.json();
+      if (!configResponse.ok || !config.uploadEndpoint || !config.anonKey || !config.userId) throw new Error(config.error || "تعذر تهيئة التخزين السحابي.");
+
+      for (const file of incoming) {
+        if (file.size <= 0) { skipped.push(file.name + " (ملف فارغ)"); continue; }
+        if (file.size > 50 * 1024 * 1024) { skipped.push(file.name + " (أكبر من 50MB)"); continue; }
+        const safeName = file.name.replace(/[^\p{L}\p{N}._-]/gu, "_").slice(-180) || "file";
+        const path = `${config.userId}/${crypto.randomUUID()}-${safeName}`;
+        setCloudUploadProgress(`رفع ${file.name} • 0%`);
+
+        let tusError: unknown = null;
+        try {
           await new Promise<void>((resolve, reject) => {
             const upload = new tus.Upload(file, {
               endpoint: config.uploadEndpoint,
@@ -502,7 +512,7 @@ ${data.error.name}: ${data.error.value}` : ""));
                 cacheControl: "3600",
               },
               onError: reject,
-              onProgress: (uploaded, total) => setCloudUploadProgress(`رفع ${file.name} • ${Math.floor(uploaded / Math.max(1,total) * 100)}%`),
+              onProgress: (uploaded, total) => setCloudUploadProgress(`رفع ${file.name} • ${Math.floor(uploaded / Math.max(1, total) * 100)}%`),
               onSuccess: () => resolve(),
             });
             void upload.findPreviousUploads().then(previous => {
@@ -510,42 +520,45 @@ ${data.error.name}: ${data.error.value}` : ""));
               upload.start();
             }).catch(reject);
           });
-          const register = await fetch("/api/account/storage", {
+        } catch (error) {
+          tusError = error;
+          // Small files (especially photos) get a standard Storage upload fallback.
+          if (file.size > 6 * 1024 * 1024) throw error;
+          setCloudUploadProgress(`إعادة محاولة رفع ${file.name} بالطريقة البديلة…`);
+          const direct = await fetch(`${config.uploadEndpoint.replace("/upload/resumable", "/object")}/meai-files/${path.split("/").map(encodeURIComponent).join("/")}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
-            body: JSON.stringify({ action: "register", name: file.name, path, mimeType: file.type || "application/octet-stream", size: file.size }),
+            headers: {
+              authorization: `Bearer ${accountToken}`,
+              apikey: config.anonKey,
+              "Content-Type": file.type || "application/octet-stream",
+              "x-upsert": "false",
+            },
+            body: file,
           });
-          const registered = await register.json();
-          if (!register.ok) throw new Error(registered.error || `تم رفع ${file.name} لكن تعذر تسجيله.`);
-          completed++;
+          if (!direct.ok) {
+            const detail = await direct.text().catch(() => "");
+            throw new Error(`فشل رفع "${file.name}" عبر الطريقتين. ${detail.slice(0, 240) || (tusError instanceof Error ? tusError.message : "تحقق من اتصال التخزين وصلاحيات الحساب.")}`);
+          }
+          setCloudUploadProgress(`تم رفع ${file.name} • 100%`);
         }
-        await refreshCloudFiles(accountToken);
-        setCloudUploadProgress("");
-        setNotice(`تم رفع ${completed} ملف إلى التخزين السحابي.${skipped.length ? " تم تخطي: " + skipped.join("، ") : ""}`);
-      } catch (error) {
-        setCloudUploadProgress("");
-        setNotice(error instanceof Error ? error.message : "تعذر رفع الملفات إلى السحابة.");
-        await refreshCloudFiles(accountToken);
-      }
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
 
-    const supported = /\\.(txt|md|csv|json|ya?ml|toml|html?|xml|js|jsx|ts|tsx|py|css|sql|log)$/i;
-    const accepted = incoming.filter(file => supported.test(file.name) && file.size <= 2_000_000);
-    const skipped = incoming.length - accepted.length;
-    const parsed: {name:string;content:string;size:number;updatedAt:string}[] = [];
-    for (const file of accepted) {
-      try { parsed.push({name:file.name,content:(await file.text()).slice(0,40_000),size:file.size,updatedAt:new Date().toISOString()}); } catch {}
+        const register = await fetch("/api/account/storage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
+          body: JSON.stringify({ action: "register", name: file.name, path, mimeType: file.type || "application/octet-stream", size: file.size }),
+        });
+        const registered = await register.json();
+        if (!register.ok) throw new Error(registered.error || `تم رفع ${file.name} لكن تعذر تسجيله في قائمة الملفات.`);
+        completed++;
+      }
+      await refreshCloudFiles(accountToken);
+      setCloudUploadProgress("");
+      setNotice(`تم رفع ${completed} ملف إلى التخزين السحابي.${skipped.length ? " تم تخطي: " + skipped.join("، ") : ""}`);
+    } catch (error) {
+      setCloudUploadProgress("");
+      setNotice(error instanceof Error ? error.message : "تعذر رفع الملفات إلى السحابة.");
+      await refreshCloudFiles(accountToken);
     }
-    const mergedDocs = [...documents.filter(d => !parsed.some(p => p.name === d.name)), ...parsed].slice(-40);
-    try {
-      localStorage.setItem("medhat-documents-v1", JSON.stringify(mergedDocs));
-      const names = [...new Set([...files, ...incoming.map(file=>file.name)])].slice(-200);
-      localStorage.setItem("medhat-files-v1", JSON.stringify(names));
-      setDocuments(mergedDocs); setFiles(names);
-      setNotice(`تمت قراءة محتوى ${parsed.length} ملف وحفظه محليًا.${skipped ? ` تم تخطي ${skipped} ملف: سجّل الدخول لرفع الملفات الثنائية أو الأكبر.` : ""}`);
-    } catch { setNotice("مساحة التخزين المحلية ممتلئة. سجّل الدخول لاستخدام التخزين السحابي."); }
     if (fileRef.current) fileRef.current.value = "";
   }
   function analyzeDocument(doc:{name:string;content:string}) {
