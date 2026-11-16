@@ -15,7 +15,7 @@ export function getModelConfig(): ModelConfig | null {
   const model = process.env.OPENAI_MODEL;
   const compatible: ModelConfig | null = base && key && model ? {
     provider: "openai-compatible",
-    endpoint: base.split("/").filter(Boolean).join("/") + "/chat/completions",
+    endpoint: base.replace(/\/+$/, "") + "/chat/completions",
     token: key,
     model,
   } : null;
