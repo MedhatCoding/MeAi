@@ -187,3 +187,75 @@ button, input, textarea, select { font-size: inherit; }
 
 @media(max-width:650px){.desktop-sidebar-toggle{display:none!important}}
 @media(min-width:651px){.mobile-menu{display:none!important}}
+
+
+/* ===== Accessibility: readable type and comfortable touch targets ===== */
+:root {
+  --readable-body: 16px;
+  --readable-small: 13px;
+  --touch-target: 48px;
+}
+html { font-size: 16px; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { font-size: var(--readable-body); line-height: 1.65; }
+p, li, .message-text, .result-text, .status-line, .drop-zone p,
+.hero-copy p, .page-heading p, .welcome-sub, .setting-copy small,
+.card-sub, .hint-line, .empty-inline, .file-row p, .file-row small,
+.task-row, .memory-row, .trace-item small, .privacy-note {
+  font-size: max(13px, 1em);
+  line-height: 1.85;
+}
+.message-text, .result-text { font-size: 16px; line-height: 2; }
+.nav-item, .chat-item, .recent-chat, .new-chat, .tool-btn, .mode-chip,
+.choice, .suggestion-card > span, .form-card label, .field-label {
+  font-size: 14px;
+}
+.group-label, .eyebrow, .topbar-badge, .model-pill, .privacy-note,
+.brand-copy span, .connection small, .profile-row small {
+  font-size: 12px;
+}
+.brand-copy b, .connection b, .profile-row b, .message-meta b,
+.list-header h3, .form-card label, .setting-copy b { font-size: 15px; }
+.icon-btn, .send-btn { min-width: 46px; min-height: 46px; }
+.nav-item, .chat-item, .recent-chat { min-height: 46px; }
+input, select, textarea, .form-card input, .form-card select,
+.auth-grid input, .composer textarea { font-size: 16px !important; }
+.primary-btn, .secondary-btn, .tool-btn, .choice, .mode-chip {
+  min-height: 46px;
+}
+.form-card, .list-card, .settings-card, .empty-card {
+  line-height: 1.8;
+}
+@media (min-width: 651px) {
+  .content-area { padding-inline: clamp(24px, 3.5vw, 64px); }
+  .topbar { min-height: 72px; }
+  .welcome-wrap { max-width: 820px; }
+  .conversation { max-width: 900px; }
+  .composer-wrap { max-width: 900px; }
+  .welcome-wrap h1 { font-size: clamp(34px, 3vw, 46px); }
+  .section-hero .hero-copy h1, .page-heading h1 { font-size: clamp(28px, 2vw, 34px); }
+}
+@media (max-width: 650px) {
+  :root { --readable-body: 16px; --readable-small: 14px; --touch-target: 50px; }
+  body { font-size: 16px; }
+  .content-area { padding-inline: 18px; }
+  .topbar { min-height: calc(70px + env(safe-area-inset-top)); }
+  .welcome-wrap { padding-top: 28px; }
+  .welcome-wrap h1 { font-size: clamp(30px, 8vw, 36px); line-height: 1.45; }
+  .welcome-sub, .hero-copy p, .page-heading p { font-size: 15px; line-height: 1.9; }
+  .hero-copy h1, .section-hero .hero-copy h1 { font-size: 27px; }
+  .message-text, .result-text { font-size: 16px; line-height: 2; }
+  .nav-item, .chat-item, .recent-chat, .new-chat { font-size: 15px; min-height: 50px; }
+  .primary-btn, .secondary-btn { min-height: 50px; font-size: 15px; padding: 13px 18px; }
+  .icon-btn { width: 48px; height: 48px; }
+  .composer { padding: 15px; }
+  .composer textarea { min-height: 66px; font-size: 17px !important; line-height: 1.8; }
+  .tool-btn, .mode-chip, .choice { min-height: 44px; font-size: 13px; padding: 10px 12px; }
+  .suggestion-card { min-height: 76px; padding: 16px; }
+  .suggestion-card > span { font-size: 14px; line-height: 1.6; }
+  .form-card, .list-card, .settings-card { padding: 20px; }
+  .form-card label, .field-label, .setting-copy b { font-size: 15px; }
+  .setting-copy small, .card-sub, .hint-line, .empty-inline,
+  .file-row p, .file-row small, .status-line { font-size: 13px; line-height: 1.8; }
+  .mobile-bottom-nav button { min-height: 58px; font-size: 12px; }
+  .mobile-bottom-nav button svg { width: 22px; height: 22px; }
+}
