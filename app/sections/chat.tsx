@@ -26,6 +26,8 @@ interface ChatSectionProps {
   busy: boolean;
   endRef: RefObject<HTMLDivElement | null>;
   fileRef: RefObject<HTMLInputElement | null>;
+  pendingAttachments: {name:string;content:string;mimeType:string;size:number}[];
+  setPendingAttachments: Dispatch<SetStateAction<{name:string;content:string;mimeType:string;size:number}[]>>;
   composerMode: ChatMode;
   setComposerMode: Dispatch<SetStateAction<ChatMode>>;
   handleSend: (value?: string, mode?: ChatMode) => void | Promise<void>;
@@ -38,6 +40,8 @@ export default function ChatSection({
   busy,
   endRef,
   fileRef,
+  pendingAttachments,
+  setPendingAttachments,
   composerMode,
   setComposerMode,
   handleSend,
@@ -75,6 +79,12 @@ export default function ChatSection({
       )}
       <div className="composer-wrap">
         <div className="composer">
+          {pendingAttachments.length > 0 ? <div className="attachment-list" aria-label="الملفات المرفقة">
+            {pendingAttachments.map((file,index) => <div className="attachment-chip" key={file.name + index}>
+              <Paperclip size={14}/><span>{file.name}</span><small>{file.content ? "جاهز للتحليل" : "مرفوع — القراءة غير مدعومة"}</small>
+              <button type="button" onClick={() => setPendingAttachments(old => old.filter((_,i) => i !== index))} aria-label={"إزالة " + file.name}>×</button>
+            </div>)}
+          </div> : null}
           <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }} placeholder={activeMode.placeholder} rows={1}/>
           <div className="composer-toolbar">
             <div className="composer-tools">
