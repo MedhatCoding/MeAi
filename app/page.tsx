@@ -491,13 +491,14 @@ ${data.error.name}: ${data.error.value}` : ""));
       if (!configResponse.ok || !configData.uploadEndpoint || !configData.anonKey || !configData.userId) {
         throw new Error(configData.error || "تعذر تهيئة التخزين السحابي.");
       }
-      config = configData;
+      const storageConfig = configData as { uploadEndpoint: string; anonKey: string; userId: string };
+      config = storageConfig;
 
       for (const file of incoming) {
         if (file.size <= 0) { skipped.push(file.name + " (ملف فارغ)"); continue; }
         if (file.size > 50 * 1024 * 1024) { skipped.push(file.name + " (أكبر من 50MB)"); continue; }
         const safeName = file.name.replace(/[^\\p{L}\\p{N}._-]/gu, "_").slice(-180) || "file";
-        const path = `${config.userId}/${crypto.randomUUID()}-${safeName}`;
+        const path = `${storageConfig.userId}/${crypto.randomUUID()}-${safeName}`;
         setCloudUploadProgress(`جاري رفع ${file.name} • 0% (من ${incoming.length})`);
 
         try {
@@ -505,9 +506,9 @@ ${data.error.name}: ${data.error.value}` : ""));
           try {
             await new Promise<void>((resolve, reject) => {
               const upload = new tus.Upload(file, {
-                endpoint: config!.uploadEndpoint!,
+                endpoint: storageConfig.uploadEndpoint,
                 retryDelays: [0, 3000, 5000, 10000, 20000],
-                headers: { authorization: `Bearer ${accountToken}`, apikey: config!.anonKey! },
+                headers: { authorization: `Bearer ${accountToken}`, apikey: storageConfig.anonKey },
                 uploadDataDuringCreation: true,
                 removeFingerprintOnSuccess: true,
                 chunkSize: 6 * 1024 * 1024,
