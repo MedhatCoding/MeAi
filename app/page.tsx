@@ -48,6 +48,7 @@ export default function Home() {
   const [accountEmail, setAccountEmail] = useState("");
   const [accountPassword, setAccountPassword] = useState("");
   const [accountToken, setAccountToken] = useState("");
+  const [accountExpiresAt, setAccountExpiresAt] = useState(0);
   const [accountUser, setAccountUser] = useState<{id:string;email:string}|null>(null);
   const [accountBusy, setAccountBusy] = useState(false);
   const [cloudMemoryStatus, setCloudMemoryStatus] = useState("");
@@ -81,7 +82,22 @@ export default function Home() {
   const fileRef = useRef<HTMLInputElement>(null);
   const active = useMemo(() => nav.find(n => n.id === section)!, [section]);
 
-  useEffect(() => { try { const token = sessionStorage.getItem("meai-access-token") || ""; const user = sessionStorage.getItem("meai-account-user"); if (token && user) { setAccountToken(token); setAccountUser(JSON.parse(user) as {id:string;email:string}); } } catch {} }, []);
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem("meai-access-token") || sessionStorage.getItem("meai-access-token") || "";
+      const user = localStorage.getItem("meai-account-user") || sessionStorage.getItem("meai-account-user");
+      const refreshToken = localStorage.getItem("meai-refresh-token") || "";
+      const expiresAt = Number(localStorage.getItem("meai-token-expires-at") || "0");
+      if (token && user) {
+        setAccountToken(token);
+        setAccountUser(JSON.parse(user) as {id:string;email:string});
+        setAccountExpiresAt(expiresAt);
+        localStorage.setItem("meai-access-token", token);
+        localStorage.setItem("meai-account-user", user);
+        if (!refreshToken) setCloudMemoryStatus("تم استعادة الجلسة القديمة. إذا انتهت صلاحيتها، سجّل الدخول مرة واحدة لتفعيل الحفظ المستمر.");
+      }
+    } catch {}
+  }, []);
   useEffect(() => {
     const convs = readConversations();
     setConversations(convs);
@@ -117,15 +133,59 @@ export default function Home() {
         setCloudMemoryStatus(data.message || "راجع بريدك الإلكتروني لتأكيد الحساب.");
         return;
       }
-      const session = data.session as {access_token:string;user:{id:string;email:string}};
-      setAccountToken(session.access_token); setAccountUser(session.user);
-      sessionStorage.setItem("meai-access-token", session.access_token);
-      sessionStorage.setItem("meai-account-user", JSON.stringify(session.user));
+      const session = data.session as {access_token:string;refresh_token?:string;expires_in?:number;user:{id:string;email:string}};
+      const expiresAt = Date.now() + Math.max(60, session.expires_in || 3600) * 1000;
+      setAccountToken(session.access_token); setAccountUser(session.user); setAccountExpiresAt(expiresAt);
+      localStorage.setItem("meai-access-token", session.access_token);
+      localStorage.setItem("meai-account-user", JSON.stringify(session.user));
+      if (session.refresh_token) localStorage.setItem("meai-refresh-token", session.refresh_token);
+      localStorage.setItem("meai-token-expires-at", String(expiresAt));
+      sessionStorage.removeItem("meai-access-token"); sessionStorage.removeItem("meai-account-user");
       setAccountPassword("");
       setCloudMemoryStatus("تم تسجيل الدخول. يمكنك الآن حفظ بياناتك في السحابة أو تحميلها على هذا الجهاز.");
     } catch (error) { setCloudMemoryStatus(error instanceof Error ? error.message : "حدث خطأ في الحساب."); }
     finally { setAccountBusy(false); }
   }
+  async function refreshAccountSession() {
+    const refreshToken = localStorage.getItem("meai-refresh-token") || "";
+    if (!refreshToken) {
+      setAccountToken("");
+      setAccountUser(null);
+      return false;
+    }
+    try {
+      const response = await fetch("/api/account/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.session?.access_token || !data.session?.refresh_token) {
+        throw new Error(data.error || "انتهت جلسة الحساب؛ سجّل الدخول مرة أخرى.");
+      }
+      const session = data.session as {access_token:string;refresh_token:string;expires_in:number;user:{id:string;email:string}};
+      const expiresAt = Date.now() + Math.max(60, session.expires_in || 3600) * 1000;
+      localStorage.setItem("meai-access-token", session.access_token);
+      localStorage.setItem("meai-refresh-token", session.refresh_token);
+      localStorage.setItem("meai-account-user", JSON.stringify(session.user));
+      localStorage.setItem("meai-token-expires-at", String(expiresAt));
+      setAccountToken(session.access_token);
+      setAccountUser(session.user);
+      setAccountExpiresAt(expiresAt);
+      return true;
+    } catch (error) {
+      setCloudMemoryStatus(error instanceof Error ? error.message : "تعذر تجديد جلسة الحساب.");
+      return false;
+    }
+  }
+  useEffect(() => {
+    if (!accountToken || !accountExpiresAt) return;
+    const delay = Math.max(1000, accountExpiresAt - Date.now() - 120000);
+    const timer = window.setTimeout(() => { void refreshAccountSession(); }, delay);
+    return () => window.clearTimeout(timer);
+  }, [accountToken, accountExpiresAt]);
+
   async function syncCloudMemory(mode: "save" | "load") {
     if (!accountToken || accountBusy) return;
     setAccountBusy(true); setCloudMemoryStatus(mode === "save" ? "جارٍ حفظ البيانات في السحابة…" : "جارٍ تحميل البيانات من السحابة…");
@@ -160,8 +220,10 @@ export default function Home() {
     finally { setAccountBusy(false); }
   }
   function signOutAccount() {
+    localStorage.removeItem("meai-access-token"); localStorage.removeItem("meai-refresh-token");
+    localStorage.removeItem("meai-account-user"); localStorage.removeItem("meai-token-expires-at");
     sessionStorage.removeItem("meai-access-token"); sessionStorage.removeItem("meai-account-user");
-    setAccountToken(""); setAccountUser(null); setAccountPassword(""); setCloudMemoryStatus("تم تسجيل الخروج من هذا الجهاز. لم تُحذف البيانات السحابية.");
+    setAccountToken(""); setAccountUser(null); setAccountExpiresAt(0); setAccountPassword(""); setCloudMemoryStatus("تم تسجيل الخروج من هذا الجهاز. لم تُحذف البيانات السحابية.");
   }
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-tasks-v1", JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-artifacts-v1", JSON.stringify(artifacts)); }, [artifacts]);
