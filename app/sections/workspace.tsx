@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { Code2, FileText, FolderOpen, Image as ImageIcon, Paperclip, Plus, Trash2 } from "lucide-react";
 import type { AgentArtifact, WorkspaceDocument } from "../lib/shared";
@@ -39,11 +40,33 @@ export default function WorkspaceSection({
   accountToken,
   setNotice,
 }: WorkspaceSectionProps) {
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPreviews() {
+      if (!accountToken) { setImageUrls({}); return; }
+      const images = cloudFiles.filter(file => file.mime_type?.startsWith("image/"));
+      const entries = await Promise.all(images.map(async file => {
+        try {
+          const response = await fetch("/api/account/storage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
+            body: JSON.stringify({ action: "download", path: file.storage_path }),
+          });
+          const data = await response.json();
+          return response.ok && typeof data.url === "string" ? [file.id, data.url] as const : null;
+        } catch { return null; }
+      }));
+      if (!cancelled) setImageUrls(Object.fromEntries(entries.filter((entry): entry is readonly [string, string] => Boolean(entry))));
+    }
+    void loadPreviews();
+    return () => { cancelled = true; };
+  }, [cloudFiles, accountToken]);
   return (
     <div className="section-page"><div className="section-hero"><div className="welcome-orb small"><div className="orb-core"><FolderOpen size={26}/></div><i className="orb-ring ring-one"/><i className="orb-ring ring-two"/></div><div className="hero-copy"><div className="eyebrow"><span/> ملفاتك ومخرجاتك</div><h1>مساحة العمل</h1><p>اجمع ملفات المشروع والنتائج في مساحة منظمة.</p></div><button className="primary-btn hero-action" onClick={()=>fileRef.current?.click()}><Plus size={16}/> إضافة ملفات</button></div><div className="drop-zone" onClick={()=>fileRef.current?.click()}><div className="drop-icon"><Paperclip size={24}/></div><b>أضف ملفات إلى مساحة العمل</b><p>ارفع الصور وملفات PDF وDOCX والملفات الأخرى إلى التخزين السحابي بعد تسجيل الدخول. الحد الأقصى 50MB للملف.</p><button className="secondary-btn"><FolderOpen size={15}/> تصفح الملفات</button></div><div className="list-card"><div className="list-header"><div><h3>التخزين السحابي الخاص</h3><small className="card-sub">ملفاتك الأصلية محفوظة في Supabase Storage ومحمية بحسابك</small></div><span className="pill">{cloudFiles.length} ملف</span></div>
         {cloudUploadProgress ? <p className="status-line" role="status">{cloudUploadProgress}</p> : null}
         {!accountToken ? <div className="empty-inline">سجّل الدخول من الإعدادات لرفع ملفات كبيرة وتخزينها سحابيًا.</div> : cloudFiles.length ? cloudFiles.map(file => <div className="file-row" key={file.id}>
-          <div className="file-type">{file.mime_type?.startsWith("image/") ? <ImageIcon size={18}/> : <FileText size={18}/>}</div><div style={{flex:1,minWidth:0}}><b>{file.name}</b><p>{(file.size_bytes / (1024 * 1024)).toFixed(2)} MB • {file.mime_type || "نوع غير محدد"}</p><small>{new Date(file.created_at).toLocaleString("ar-EG")}</small></div>
+          <div className="file-type">{file.mime_type?.startsWith("image/") ? (imageUrls[file.id] ? <img src={imageUrls[file.id]} alt={file.name} loading="lazy" style={{width:64,height:64,objectFit:"cover",borderRadius:12}}/> : <ImageIcon size={22}/>) : <FileText size={18}/>}</div><div style={{flex:1,minWidth:0}}><b>{file.name}</b><p>{(file.size_bytes / (1024 * 1024)).toFixed(2)} MB • {file.mime_type || "نوع غير محدد"}</p><small>{new Date(file.created_at).toLocaleString("ar-EG")}</small></div>
           <button className="secondary-btn" onClick={async()=>{try{const response=await fetch("/api/account/storage",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${accountToken}`},body:JSON.stringify({action:"download",path:file.storage_path})});const data=await response.json();if(!response.ok)throw new Error(data.error||"تعذر إنشاء رابط التنزيل.");const link=document.createElement("a");link.href=data.url;link.download=file.name;link.rel="noopener";document.body.appendChild(link);link.click();link.remove();}catch(error){setNotice(error instanceof Error?error.message:"تعذر تنزيل الملف.");}}}>تنزيل</button>
           <button className="icon-btn" aria-label="حذف الملف السحابي" onClick={async()=>{if(!confirm(`حذف الملف ${file.name} نهائيًا من السحابة؟`))return;try{const response=await fetch("/api/account/storage",{method:"DELETE",headers:{"Content-Type":"application/json",Authorization:`Bearer ${accountToken}`},body:JSON.stringify({id:file.id})});const data=await response.json();if(!response.ok)throw new Error(data.error||"تعذر حذف الملف.");setCloudFiles(old=>old.filter(item=>item.id!==file.id));setNotice("تم حذف الملف من التخزين السحابي.");}catch(error){setNotice(error instanceof Error?error.message:"تعذر حذف الملف.");}}}><Trash2 size={16}/></button>
         </div>) : <div className="empty-inline">لا توجد ملفات سحابية بعد. اختر «إضافة ملفات» لرفع أول ملف.</div>}
