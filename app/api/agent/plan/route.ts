@@ -1,6 +1,7 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
 import { enforceApiAccess } from "../../_lib/api-access";
 import { NextRequest } from "next/server";
+import { getModelConfig } from "../../_lib/model-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,24 +30,9 @@ export async function POST(request: NextRequest) {
     return error("تعذر قراءة الطلب.", 400);
   }
 
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const cloudflareToken = process.env.CLOUDFLARE_API_TOKEN;
-  const cloudflareModel = process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.1-8b-instruct";
-  const base = process.env.OPENAI_BASE_URL;
-  const key = process.env.OPENAI_API_KEY;
-  const openAiModel = process.env.OPENAI_MODEL;
-  let endpoint = "";
-  let token = "";
-  let model = "";
-  if (accountId && cloudflareToken) {
-    endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/chat/completions`;
-    token = cloudflareToken; model = cloudflareModel;
-  } else if (base && key && openAiModel) {
-    endpoint = `${base.replace(/\/+$/, "")}/chat/completions`;
-    token = key; model = openAiModel;
-  } else {
-    return error("خدمة الذكاء الاصطناعي غير مهيأة. أضف أسرار المزوّد في إعدادات الاستضافة.", 503);
-  }
+  const modelConfig = getModelConfig();
+  if (!modelConfig) return error("خدمة الذكاء الاصطناعي غير مهيأة. أضف أسرار المزوّد في إعدادات الاستضافة.", 503);
+  const { endpoint, token, model } = modelConfig;
 
   const system = `أنت مخطط مهام لمساعد عام يدعم البحث والتجارب التقنية والأمن السيبراني. لا تدّع أنك نفّذت أي شيء. أعد JSON صالحًا فقط دون Markdown بالشكل:
 {"summary":"ملخص قصير بالعربية","steps":["خطوة واضحة","خطوة واضحة"],"limitations":["حد أو تحذير"]}
