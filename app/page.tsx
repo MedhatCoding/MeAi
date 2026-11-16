@@ -385,23 +385,21 @@ ${data.error.name}: ${data.error.value}` : ""));
   }
 
   async function sendMessage(value = input, sources?: ResearchResult[], skipWebSearch = false) {
-    const text = value.trim(); if (!text || busy) return;
+    const text = value.trim(); if ((!text && !pendingAttachments.length) || busy) return;
+    const attachmentLabel = pendingAttachments.length ? "\n\nالمرفقات: " + pendingAttachments.map(item => item.name).join("، ") : "";
+    const messageText = text + attachmentLabel;
     const stamp = () => new Date().toLocaleTimeString("ar-EG", {hour:"2-digit",minute:"2-digit"});
     const sourceCards = sources?.map(({ content: _content, ...source }) => source);
-    const next: Message[] = [...messages, { role: "user", content: text, time: stamp() }, { role: "assistant", content: "", time: stamp(), ...(sourceCards?.length ? { sources: sourceCards } : {}) }];
+    const next: Message[] = [...messages, { role: "user", content: messageText, time: stamp() }, { role: "assistant", content: "", time: stamp(), ...(sourceCards?.length ? { sources: sourceCards } : {}) }];
     setMessages(next); setInput(""); setBusy(true); setNotice("");
     const attachedDocs = pendingAttachments.filter(item => item.content).map(item => ({name:item.name,content:item.content}));
-    const unsupported = pendingAttachments.filter(item => !item.content);
-    const enrichedHistory = [...next.slice(0, -1)];
-    if (attachedDocs.length || unsupported.length) {
-      const note = [
-        ...attachedDocs.map(item => `[ملف مرفق: ${item.name}]\n${item.content}`),
-        ...unsupported.map(item => `[مرفق: ${item.name} — تم رفعه للسحابة، لكن استخراج محتواه غير مدعوم لهذا النوع حاليًا.]`),
-      ].join("\n\n");
-      if (unsupported.length) setNotice("تم إرفاق الملفات بالمحادثة. بعض الأنواع غير النصية محفوظة بالسحابة لكن لا يمكن قراءة محتواها بعد.");
-    }
+    const unsupportedDocs = pendingAttachments.filter(item => !item.content).map(item => ({
+      name: item.name,
+      content: "الملف مرفوع ومحفوظ في مساحة العمل السحابية، لكن نوعه أو حجمه غير مدعوم للاستخراج النصي في الإصدار الحالي. أخبر المستخدم بوضوح أنك لا تستطيع قراءة محتواه حتى الآن.",
+    }));
+    if (unsupportedDocs.length) setNotice("تم إرفاق الملفات بالمحادثة، لكن بعض الأنواع غير النصية محفوظة بالسحابة ولا يمكن قراءة محتواها بعد.");
     setPendingAttachments([]);
-    await streamInto(enrichedHistory, "", skipWebSearch, attachedDocs);
+    await streamInto(next.slice(0, -1), "", skipWebSearch, [...attachedDocs, ...unsupportedDocs]);
   }
 
   async function streamInto(history: Message[], prefix: string, skipWebSearch = false, extraDocuments: {name:string;content:string}[] = []) {
