@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
   }
   let evidence = "";
   let searchUsed = false;
+  let searchResultCount = 0;
   let searchSources: { title: string; url: string; date?: string }[] = [];
   const toolTrace: { tool: string; status: "success" | "unavailable" | "failed" | "skipped"; detail: string }[] = [];
   if (wantsSearch) {
@@ -115,6 +116,7 @@ export async function POST(request: NextRequest) {
           if (Number.isFinite(bd)) return 1;
           return (a.position ?? 99) - (b.position ?? 99);
         }).slice(0, 12);
+      searchResultCount = uniqueResults.length;
       searchSources = uniqueResults.map(({ title, url, date }) => ({ title, url, ...(date ? { date } : {}) }));
       evidence = uniqueResults.map((item) => `- ${item.title}\n  المصدر: ${item.source}؛ نوعه: ${item.sourceType}؛ محرك البحث: ${item.provider}\n  ${item.snippet}\n  ${item.date ? "التاريخ: " + item.date + "\n  " : ""}${item.content ? "النص المستخرج: " + item.content.slice(0, 2500) + "\n  " : ""}${item.url}`).join("\n\n");
       searchUsed = uniqueResults.length > 0;
@@ -334,6 +336,11 @@ print(f"Average: {average}")`;
     toolTrace.push({ tool: "agent_review", status: reviewStatus, detail: reviewStatus === "success" ? "تمت مراجعة الإجابة مرة واحدة ومحاولة سد أي نقص قبل عرضها." : "تعذرت المراجعة الإضافية؛ عُرضت الإجابة الأولية دون ادعاء اكتمال المراجعة." });
     if (codeExecutionSucceeded && codeExecutionSummary) {
       finalAnswer += "\n\n**تأكيد التنفيذ الفعلي داخل E2B:**\n" + codeExecutionSummary + "\nالإنترنت الخارجي معطّل عمدًا داخل المختبر؛ وهذا لا يمنع تنفيذ الحسابات المحلية.";
+    } else if (wantsCodeExecution) {
+      finalAnswer += "\n\n**تنبيه تنفيذ:** لم يثبت نجاح تشغيل Python داخل E2B. راجع سجل الأداة؛ لا توجد نتيجة حسابية مؤكدة.";
+    }
+    if (wantsSearch && requiresThreeSources && searchResultCount < 3) {
+      finalAnswer += "\n\n**تنبيه البحث:** البحث غير مكتمل؛ تم التحقق من " + searchResultCount + " نتيجة فقط من أصل 3 مطلوبة. لم أستكمل العدد بمصادر مخترعة.";
     }
     const wantsArtifact = /(?:أنشئ|انشئ|اعمل|جهّز|جهز|احفظ|صدّر|صدر).{0,50}(?:ملف|تقرير|مستند)|(?:file|report|document).{0,40}(?:create|generate|save|export)|(?:create|generate|save|export).{0,40}(?:file|report|document)/i.test(task);
     const artifact = wantsArtifact && finalAnswer.trim()
