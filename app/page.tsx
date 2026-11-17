@@ -45,7 +45,7 @@ export default function Home() {
   const [files, setFiles] = useState<string[]>([]);
   const [cloudFiles, setCloudFiles] = useState<{id:string;name:string;mime_type:string|null;storage_path:string;size_bytes:number;created_at:string}[]>([]);
   const [cloudUploadProgress, setCloudUploadProgress] = useState("");
-  const [pendingAttachments, setPendingAttachments] = useState<{name:string;content:string;mimeType:string;size:number;extractionError?:string}[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<{name:string;content:string;mimeType:string;size:number;extractionError?:string;imageDataUrl?:string}[]>([]);
   const [documents, setDocuments] = useState<{name:string;content:string;size:number;updatedAt:string}[]>([]);
   const [artifacts, setArtifacts] = useState<{filename:string;content:string;summary:string;createdAt:string}[]>([]);
   const [artifactBusy, setArtifactBusy] = useState(false);
@@ -405,19 +405,20 @@ ${data.error.name}: ${data.error.value}` : ""));
     const next: Message[] = [...messages, { role: "user", content: messageText, time: stamp() }, { role: "assistant", content: "", time: stamp(), ...(sourceCards?.length ? { sources: sourceCards } : {}) }];
     setMessages(next); setInput(""); setBusy(true); setNotice("");
     const attachedDocs = pendingAttachments.filter(item => item.content).map(item => ({name:item.name,content:item.content}));
-    const unsupportedDocs = pendingAttachments.filter(item => !item.content).map(item => ({
+    const visionImages = pendingAttachments.filter(item => item.imageDataUrl).map(item => ({name:item.name,mimeType:item.mimeType,dataUrl:item.imageDataUrl!}));
+    const unsupportedDocs = pendingAttachments.filter(item => !item.content && !item.imageDataUrl).map(item => ({
       name: item.name,
       content: "تعذر استخراج محتوى الملف من خدمة الاستخراج المستقلة: " + (item.extractionError || "نوع الملف غير مدعوم حاليًا") + ". أخبر المستخدم بوضوح أنك لا تستطيع قراءة محتواه حتى الآن.",
     }));
-    if (unsupportedDocs.length) setNotice("تم إرفاق الملفات بالمحادثة، لكن بعض الأنواع غير النصية محفوظة بالسحابة ولا يمكن قراءة محتواها بعد.");
+    if (unsupportedDocs.length) setNotice("بعض المرفقات لم يمكن استخراج نصها أو إرسالها للتحليل البصري.");
     setPendingAttachments([]);
-    await streamInto(next.slice(0, -1), "", skipWebSearch, [...attachedDocs, ...unsupportedDocs]);
+    await streamInto(next.slice(0, -1), "", skipWebSearch, [...attachedDocs, ...unsupportedDocs], visionImages);
   }
 
-  async function streamInto(history: Message[], prefix: string, skipWebSearch = false, extraDocuments: {name:string;content:string}[] = []) {
+  async function streamInto(history: Message[], prefix: string, skipWebSearch = false, extraDocuments: {name:string;content:string}[] = [], visionImages: {name:string;mimeType:string;dataUrl:string}[] = []) {
     let answer = "";
     try {
-      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: history.map(m => ({role:m.role, content:m.content})), documents: [...documents.map(d => ({ name:d.name, content:d.content.slice(0,20000) })), ...extraDocuments.map(d => ({name:d.name,content:d.content.slice(0,200000)}))], skipWebSearch }) });
+      const res = await fetch("/api/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ messages: history.map(m => ({role:m.role, content:m.content})), documents: [...documents.map(d => ({ name:d.name, content:d.content.slice(0,20000) })), ...extraDocuments.map(d => ({name:d.name,content:d.content.slice(0,200000)}))], images: visionImages, skipWebSearch }) });
       if (!res.ok) {
         let detail = "فشل الاتصال بخدمة الذكاء الاصطناعي.";
         try { const data = await res.json() as {error?:string}; if (data.error) detail = data.error; } catch {}
@@ -555,6 +556,37 @@ ${data.error.name}: ${data.error.value}` : ""));
     }
   }
 
+  async function makeVisionImageDataUrl(file: File): Promise<string> {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!file.type.startsWith("image/")) return "";
+    let prepared = file;
+    if (file.size > 1500000) {
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("تعذر تجهيز الصورة.");
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("تعذر ضغط الصورة.")), "image/jpeg", 0.78));
+        if (blob.size > 1500000) throw new Error("الصورة ما زالت كبيرة.");
+        prepared = new File([blob], file.name + ".jpg", { type:"image/jpeg" });
+      } catch {
+        throw new Error("تعذر تجهيز الصورة للتحليل البصري؛ جرّب صورة JPG أو PNG أصغر.");
+      }
+    }
+    if (!allowed.includes(prepared.type) || prepared.size > 1500000) throw new Error("صيغة الصورة غير مدعومة للتحليل البصري أو حجمها كبير.");
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("تعذر قراءة الصورة."));
+      reader.onerror = () => reject(new Error("تعذر قراءة الصورة."));
+      reader.readAsDataURL(prepared);
+    });
+  }
+
   async function uploadFiles(list: FileList | null) {
     if (!list?.length) return;
     const incoming = Array.from(list);
@@ -644,6 +676,11 @@ ${data.error.name}: ${data.error.value}` : ""));
           if (attachToChat) {
             let content = "";
             let extractionError = "";
+            let imageDataUrl = "";
+            if (mimeType.startsWith("image/")) {
+              try { imageDataUrl = await makeVisionImageDataUrl(file); }
+              catch (error) { extractionError = error instanceof Error ? error.message : "تعذر تجهيز الصورة للتحليل البصري."; }
+            }
             try {
               const extractionResponse = await fetch("/api/files/extract", {
                 method: "POST",
@@ -659,6 +696,7 @@ ${data.error.name}: ${data.error.value}` : ""));
             }
             setPendingAttachments(old => [...old.filter(item => item.name !== file.name), {
               name: file.name, content, mimeType: mimeType, size: file.size,
+              ...(imageDataUrl ? { imageDataUrl } : {}),
               ...(extractionError ? { extractionError } : {}),
             }]);
             if (content) {
