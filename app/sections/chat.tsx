@@ -5,13 +5,6 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 import { ArrowUp, Check, Copy, ExternalLink, Paperclip, Send, ShieldCheck, Sparkles, Code2, Search, Image as ImageIcon, Bot } from "lucide-react";
 import type { ChatMode, Message } from "../lib/shared";
 
-const modes: { id: ChatMode; label: string; icon: typeof MessageCircle; placeholder: string }[] = [
-  { id: "chat", label: "محادثة", icon: MessageCircle, placeholder: "اسأل Medhat AI أي حاجة..." },
-  { id: "research", label: "بحث", icon: Search, placeholder: "إيه اللي تحب أدوّر عليه على الويب؟" },
-  { id: "image", label: "صورة", icon: ImageIcon, placeholder: "وصّف الصورة اللي تتخيلها..." },
-  { id: "agent", label: "وكيل", icon: Bot, placeholder: "اكتب مهمة كاملة للوكيل ينفذها..." },
-];
-
 const suggestions = [
   { icon: Code2, title: "ساعدني في البرمجة", mode: "chat" as ChatMode, prompt: "ساعدني في مراجعة كود وتحسينه مع شرح التغييرات." },
   { icon: Search, title: "ابحث على الويب", mode: "research" as ChatMode, prompt: "أحدث تطورات الذكاء الاصطناعي مفتوحة المصدر هذا الشهر" },
@@ -42,12 +35,10 @@ export default function ChatSection({
   fileRef,
   pendingAttachments,
   setPendingAttachments,
-  composerMode,
   setComposerMode,
   handleSend,
 }: ChatSectionProps) {
   const [copied, setCopied] = useState<number | null>(null);
-  const activeMode = modes.find(m => m.id === composerMode) ?? modes[0];
   return (
     <div className={"chat-page " + (messages.length ? "has-messages" : "")}>
       {messages.length === 0 ? (
