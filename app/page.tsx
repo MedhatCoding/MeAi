@@ -227,6 +227,7 @@ export default function Home() {
     setAccountToken(""); setAccountUser(null); setAccountExpiresAt(0); setAccountPassword(""); setCloudMemoryStatus("تم تسجيل الخروج من هذا الجهاز. لم تُحذف البيانات السحابية.");
   }
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-tasks-v1", JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-documents-v1", JSON.stringify(documents)); }, [documents]);
   useEffect(() => { if (typeof window !== "undefined") localStorage.setItem("medhat-artifacts-v1", JSON.stringify(artifacts)); }, [artifacts]);
   useEffect(() => { try { const raw = localStorage.getItem("medhat-agent-plan-v1"); if (raw) { const saved = JSON.parse(raw) as {plan?:{summary:string;steps:string[];limitations:string[]};done?:boolean[]}; if (saved.plan && Array.isArray(saved.plan.steps)) { setAgentPlan(saved.plan); setAgentDone(saved.plan.steps.map((_,i)=>Boolean(saved.done?.[i]))); } } } catch {} }, []);
   useEffect(() => { if (typeof window !== "undefined" && agentPlan) localStorage.setItem("medhat-agent-plan-v1", JSON.stringify({plan:agentPlan,done:agentDone})); }, [agentPlan,agentDone]);
@@ -527,7 +528,7 @@ ${data.error.name}: ${data.error.value}` : ""));
     const conv = conversations.find(c => c.id === id); if (!conv) return;
     setActiveId(id); setMessages(conv.messages);
     try { localStorage.setItem("medhat-active-chat-v1", id); } catch {}
-    setSection("chat"); setMobileNavOpen(false); setNotice("");
+    setSection("chat"); setSidebarOpen(false); setMobileNavOpen(false); setNotice("");
   }
 
   function deleteConversation(id: string, e: { stopPropagation: () => void }) {
@@ -648,6 +649,11 @@ ${data.error.name}: ${data.error.value}` : ""));
               name: file.name, content, mimeType: file.type || "application/octet-stream", size: file.size,
               ...(extractionError ? { extractionError } : {}),
             }]);
+            if (content) {
+              setDocuments(old => [...old.filter(doc => doc.name !== file.name), {
+                name: file.name, content, size: file.size, updatedAt: new Date().toISOString(),
+              }].slice(-12));
+            }
           }
         } catch (error) {
           failed.push(`${file.name}: ${error instanceof Error ? error.message : "فشل غير معروف"}`);
