@@ -62,7 +62,9 @@ export async function GET(request: NextRequest) {
   const cloudflare = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
   const compatible = Boolean(process.env.OPENAI_BASE_URL && process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL);
   const supabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  const [cloudflareResult, compatibleResult, supabaseResult] = await Promise.all([
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiModel = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || "gemini-3.8-flash";
+  const [cloudflareResult, compatibleResult, supabaseResult, geminiResult] = await Promise.all([
     cloudflare ? (async () => {
       try {
         const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(process.env.CLOUDFLARE_ACCOUNT_ID!)}/ai/models/search?search=${encodeURIComponent(process.env.CLOUDFLARE_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct")}`, {
@@ -95,12 +97,26 @@ export async function GET(request: NextRequest) {
         return { ok: response.ok, status: response.status };
       } catch { return { ok: false, status: 0 }; }
     })() : Promise.resolve({ ok: false, status: -1 }),
+    geminiKey ? (async () => {
+      try {
+        const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models", {
+          headers: { "x-goog-api-key": geminiKey, Accept: "application/json" },
+          cache: "no-store",
+          signal: AbortSignal.timeout(7000),
+        });
+        if (!response.ok) return { ok: false, modelAvailable: false, status: response.status };
+        const data = await response.json() as { models?: { name?: string; supportedGenerationMethods?: string[] }[] };
+        const model = data.models?.find(item => item.name === "models/" + geminiModel || item.name === geminiModel);
+        return { ok: true, modelAvailable: Boolean(model?.supportedGenerationMethods?.includes("generateContent")), status: 200 };
+      } catch { return { ok: false, modelAvailable: false, status: 0 }; }
+    })() : Promise.resolve({ ok: false, modelAvailable: false, status: -1 }),
   ]);
   const googleSession = await getGoogleAccess(request);
   const googleConfigured = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.MEAI_GOOGLE_REDIRECT_URI && process.env.MEAI_SESSION_SECRET);
   connectors.push(
     { id: "google", label: "Google Workspace", configured: googleConfigured, connected: Boolean(googleSession), verified: Boolean(googleSession), mode: "OAuth / Drive / Calendar read-only", detail: !googleConfigured ? "أكمل إعدادات Google OAuth وMEAI_SESSION_SECRET." : googleSession ? "تم التحقق من جلسة Google؛ يمكن قراءة ملفات Drive وأحداث التقويم القادمة." : "بيانات OAuth مهيأة لكن لم يتم ربط حساب Google في هذا المتصفح." },
     { id: "supabase", label: "Supabase", configured: supabase, connected: supabaseResult.ok, verified: supabaseResult.status !== -1, mode: "Project health", detail: !supabase ? "بيانات المشروع غير مهيأة." : supabaseResult.ok ? "نجح فحص حي لخدمة Auth؛ هذا لا يثبت إعداد قاعدة البيانات أو سياسات RLS." : supabaseResult.status === 0 ? "تعذر الوصول إلى Supabase أثناء الفحص." : `فشل فحص Supabase (HTTP ${supabaseResult.status})؛ تحقق من رابط المشروع ومفتاح anon.` },
+    { id: "gemini", label: "Google Gemini Vision", configured: Boolean(geminiKey), connected: geminiResult.ok && geminiResult.modelAvailable, verified: geminiResult.status !== -1, mode: "Gemini API / Vision model", detail: !geminiKey ? "أضف GEMINI_API_KEY في أسرار الخادم." : geminiResult.status === 0 ? "تعذر الوصول إلى Gemini أثناء الفحص." : geminiResult.status !== 200 ? `فشل التحقق من مفتاح Gemini (HTTP ${geminiResult.status}).` : geminiResult.modelAvailable ? `نجح التحقق من المفتاح وتوفر النموذج ${geminiModel}. لم يتم بعد اختبار إرسال صورة فعلية.` : `المفتاح صالح لكن النموذج ${geminiModel} غير متاح أو لا يدعم generateContent.` },
     { id: "cloudflare-ai", label: "Cloudflare Workers AI", configured: cloudflare, connected: cloudflareResult.ok, verified: cloudflareResult.status !== -1, mode: "AI provider", detail: !cloudflare ? "بيانات المزوّد غير مهيأة." : cloudflareResult.ok ? "نجح اختبار حي لواجهة قائمة النماذج باستخدام بيانات الخادم." : cloudflareResult.status === 0 ? "تعذر الوصول إلى Cloudflare أثناء الفحص." : `فشل اختبار Cloudflare (HTTP ${cloudflareResult.status})؛ راجع الرمز والصلاحيات والحساب.` },
     { id: "openai-compatible", label: "OpenAI-compatible provider", configured: compatible, connected: compatibleResult.ok, verified: compatibleResult.status !== -1, mode: "AI provider fallback", detail: !compatible ? "بيانات المزوّد غير مهيأة." : compatibleResult.ok ? "نجح اختبار حي لنقطة /models باستخدام بيانات الخادم." : compatibleResult.status === 0 ? "تعذر الوصول إلى مزوّد OpenAI-compatible أثناء الفحص." : `فشل اختبار المزوّد (HTTP ${compatibleResult.status})؛ راجع عنوان API والرمز.` },
   );
