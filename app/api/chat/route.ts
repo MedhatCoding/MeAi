@@ -285,7 +285,7 @@ export async function POST(request: NextRequest) {
   if (!upstream.body) return jsonError("المزوّد لم يُرجع تدفقًا للرد.", 502);
 
   // Convert Cloudflare's {"response":"token"} SSE frames into the OpenAI delta format used by the chat UI.
-  let responseBody = upstream.body;
+  let responseBody: ReadableStream<Uint8Array> = upstream.body;
   if (visionImages.length && activeModelConfig.provider === "cloudflare") {
     const decoder = new TextDecoder();
     const encoder = new TextEncoder();
