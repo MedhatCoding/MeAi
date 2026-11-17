@@ -53,3 +53,16 @@ export function getConfiguredModelProviders(): string[] {
   if (process.env.OPENAI_BASE_URL && process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL) providers.push("openai-compatible");
   return providers;
 }
+
+
+// Vision is routed explicitly to Gemini because the default Cloudflare text model is not multimodal.
+export function getVisionModelConfig(): ModelConfig | null {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  return {
+    provider: "gemini",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    token: key,
+    model: process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || "gemini-3.8-flash",
+  };
+}
