@@ -8,7 +8,7 @@ export const maxDuration = 60;
 const BUCKET = "meai-files";
 const MAX_EXTRACT_BYTES = 15 * 1024 * 1024;
 const MAX_TEXT_CHARS = 200_000;
-const OCR_MAX_PAGES = 12;
+const OCR_MAX_PAGES = 3;
 
 function fail(message: string, status: number) {
   return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
@@ -38,6 +38,8 @@ async function authenticate(request: NextRequest) {
 async function createOcrWorker() {
   const { createWorker } = await import("tesseract.js");
   return createWorker("ara+eng", 1, {
+    // Pin the WASM core to a CDN build because Vercel output tracing can omit optional SIMD binaries.
+    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0/tesseract-core-simd.wasm.js",
     langPath: "https://tessdata.projectnaptha.com/4.0.0",
     gzip: true,
     logger: () => undefined,
