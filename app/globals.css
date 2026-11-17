@@ -316,3 +316,68 @@ body { font-size: 17px; line-height: 1.75; }
   .mobile-bottom-nav { min-height: calc(68px + env(safe-area-inset-bottom)); }
   .mobile-bottom-nav button { min-height: 62px; font-size: 13px; }
 }
+
+
+/* Unified chat and mobile-first readability overrides */
+:root {
+  --readable-body: 17px;
+  --readable-small: 14px;
+  --touch-target: 52px;
+}
+html { font-size: 17px; }
+body { font-size: 17px; line-height: 1.8; }
+.message-text, .result-text { font-size: 17px; line-height: 2.05; }
+.message-meta b { font-size: 15px; }
+.message-meta time { font-size: 13px; }
+.source-card { padding: 14px; gap: 8px; }
+.source-card b { font-size: 14px; line-height: 1.75; }
+.source-card p { font-size: 13px; line-height: 1.8; max-height: 78px; }
+.source-host { font-size: 12px; }
+.trace-item b { font-size: 14px; }
+.trace-item small { font-size: 13px; line-height: 1.8; }
+.auto-mode-label { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 700; padding-inline: 8px; }
+.tool-btn { min-width: 52px; min-height: 52px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 14px; }
+.send-btn { min-width: 54px; min-height: 54px; width: 54px; height: 54px; }
+.nav-item, .chat-item, .recent-chat, .new-chat { font-size: 15px; min-height: 52px; }
+.primary-btn, .secondary-btn { min-height: 52px; font-size: 15px; }
+.form-card label, .field-label, .setting-copy b, .list-header h3 { font-size: 16px; }
+.setting-copy small, .card-sub, .hint-line, .status-line { font-size: 14px; line-height: 1.9; }
+.mobile-bottom-nav button { min-height: 60px; font-size: 13px; gap: 5px; }
+.mobile-bottom-nav button svg { width: 23px; height: 23px; }
+.composer textarea { font-size: 18px !important; line-height: 1.85; min-height: 72px; }
+.composer { padding: 16px; }
+@media (max-width: 650px) {
+  html, body { font-size: 17px; }
+  .content-area { padding-inline: 16px; }
+  .topbar { min-height: calc(72px + env(safe-area-inset-top)); }
+  .crumb { font-size: 17px; }
+  .welcome-wrap h1 { font-size: clamp(31px, 8vw, 37px); line-height: 1.5; }
+  .welcome-sub, .hero-copy p, .page-heading p { font-size: 16px; line-height: 1.95; }
+  .message-text, .result-text { font-size: 17px; line-height: 2.05; }
+  .message-row { gap: 11px; margin-bottom: 25px; }
+  .message-avatar { width: 36px; height: 36px; flex-basis: 36px; }
+  .message-meta b { font-size: 15px; }
+  .message-meta time { font-size: 13px; }
+  .composer { border-radius: 23px; padding: 15px; }
+  .composer textarea { font-size: 18px !important; min-height: 76px; }
+  .tool-btn { min-width: 54px; min-height: 54px; font-size: 14px; }
+  .send-btn { min-width: 56px; min-height: 56px; width: 56px; height: 56px; }
+  .auto-mode-label { font-size: 13px; }
+  .primary-btn, .secondary-btn { min-height: 54px; font-size: 16px; }
+  .nav-item, .chat-item, .recent-chat, .new-chat { min-height: 54px; font-size: 16px; }
+  .form-card, .list-card, .settings-card { padding: 20px; }
+  .form-card label, .field-label, .setting-copy b, .list-header h3 { font-size: 16px; }
+  .form-card textarea, .form-card select, .form-card input, .auth-grid input { font-size: 17px !important; }
+  .source-card b { font-size: 15px; }
+  .source-card p { font-size: 14px; max-height: 96px; }
+  .source-host { font-size: 12px; }
+  .trace-item b { font-size: 14px; }
+  .trace-item small { font-size: 13px; }
+  .mobile-bottom-nav { left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom)); min-height: calc(70px + env(safe-area-inset-bottom)); }
+  .mobile-bottom-nav button { min-height: 62px; font-size: 13px; }
+}
+@media (max-width: 380px) {
+  .content-area { padding-inline: 12px; }
+  .auto-mode-label { font-size: 12px; }
+  .mobile-bottom-nav button { font-size: 12px; }
+}
