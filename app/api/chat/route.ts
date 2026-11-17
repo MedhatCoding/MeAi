@@ -162,7 +162,8 @@ export async function POST(request: NextRequest) {
   const latestIndex = messages.map((m) => m.role).lastIndexOf("user");
   const latestUser = latestIndex >= 0 ? messages[latestIndex].content : "";
   const visionConfig = visionImages.length ? getVisionModelConfig() : null;
-  if (visionImages.length && !visionConfig) return jsonError("تحليل الصور المباشر يحتاج إعداد GEMINI_API_KEY في إعدادات الاستضافة. لم نرسل الصورة إلى نموذج نصي غير داعم للرؤية.", 503);
+  if (visionImages.length && !visionConfig) return jsonError("تحليل الصور المباشر يحتاج إعداد Cloudflare Workers AI أو GEMINI_API_KEY. لم نرسل الصورة إلى نموذج نصي غير داعم للرؤية.", 503);
+  if (visionImages.length > 1 && visionConfig?.provider === "cloudflare") return jsonError("نموذج الرؤية الحالي في Cloudflare يحلل صورة واحدة في كل رسالة. أرسل الصور واحدة تلو الأخرى.", 400);
   const modelConfig = visionConfig || getModelConfig();
   // When a file is attached, the user's intent is normally to inspect that file.
   // Do not let the planner turn a document/image question into an unrelated web search.
@@ -226,7 +227,7 @@ export async function POST(request: NextRequest) {
   }
   groundedMessages = [systemMessage, ...groundedMessages];
   const providerMessages: Array<ChatMessage | { role: "user"; content: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> }> = groundedMessages;
-  if (visionImages.length) {
+  if (visionImages.length && visionConfig?.provider === "gemini") {
     const lastUserIndex = providerMessages.map(message => message.role).lastIndexOf("user");
     if (lastUserIndex >= 0) {
       const textContent = String(providerMessages[lastUserIndex].content);
@@ -257,7 +258,9 @@ export async function POST(request: NextRequest) {
     upstream = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ model, messages: providerMessages, stream: true, temperature: 0.6 }),
+      body: JSON.stringify(visionImages.length && activeModelConfig.provider === "cloudflare"
+        ? { messages: groundedMessages, image: visionImages[0].dataUrl, stream: true, temperature: 0.6, max_tokens: 1800 }
+        : { model, messages: providerMessages, stream: true, temperature: 0.6 }),
       signal: request.signal,
       cache: "no-store",
     });
@@ -265,16 +268,64 @@ export async function POST(request: NextRequest) {
     return jsonError("تعذر الاتصال بمزوّد الذكاء الاصطناعي. تحقق من الاتصال والإعدادات.", 502);
   }
   if (!upstream.ok) {
+    const providerError = await upstream.text().catch(() => "");
+    if (visionImages.length && activeModelConfig.provider === "cloudflare" && /license|agree|acceptable use|terms/i.test(providerError)) {
+      return jsonError("نموذج الرؤية من Cloudflare يحتاج موافقة أولية على ترخيص Meta وسياسة الاستخدام قبل أول تشغيل. وافق عليها من لوحة Cloudflare، ثم أعد تجربة الصورة.", 503);
+    }
     return jsonError(`تعذر إكمال الرد من مزوّد الذكاء الاصطناعي (رمز ${upstream.status}). تحقق من إعدادات المزوّد أو جرّب لاحقًا.`, 502);
   }
   if (!upstream.body) return jsonError("المزوّد لم يُرجع تدفقًا للرد.", 502);
 
+  // Convert Cloudflare's {"response":"token"} SSE frames into the OpenAI delta format used by the chat UI.
+  let responseBody = upstream.body;
+  if (visionImages.length && activeModelConfig.provider === "cloudflare") {
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    let pending = "";
+    responseBody = upstream.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        pending += decoder.decode(chunk, { stream: true });
+        const frames = pending.split("\\n\\n");
+        pending = frames.pop() || "";
+        for (const frame of frames) {
+          const data = frame.split("\\n").find(line => line.startsWith("data:"))?.slice(5).trim();
+          if (!data) continue;
+          if (data === "[DONE]") {
+            controller.enqueue(encoder.encode("data: [DONE]\\n\\n"));
+            continue;
+          }
+          try {
+            const parsed = JSON.parse(data) as { response?: unknown; error?: unknown };
+            if (typeof parsed.response === "string") {
+              controller.enqueue(encoder.encode("data: " + JSON.stringify({ choices: [{ delta: { content: parsed.response } }] }) + "\\n\\n"));
+            } else if (parsed.error) {
+              controller.enqueue(encoder.encode("data: " + JSON.stringify({ error: { message: String(parsed.error) } }) + "\\n\\n"));
+            }
+          } catch {
+            // Ignore malformed provider frames; never forward raw provider payloads to the UI.
+          }
+        }
+      },
+      flush(controller) {
+        pending += decoder.decode();
+        const data = pending.split("\\n").find(line => line.startsWith("data:"))?.slice(5).trim();
+        if (data && data !== "[DONE]") {
+          try {
+            const parsed = JSON.parse(data) as { response?: unknown };
+            if (typeof parsed.response === "string") controller.enqueue(encoder.encode("data: " + JSON.stringify({ choices: [{ delta: { content: parsed.response } }] }) + "\\n\\n"));
+          } catch {}
+        }
+        controller.enqueue(encoder.encode("data: [DONE]\\n\\n"));
+      },
+    }));
+  }
+
   // Send immutable search metadata as its own SSE event before the model's token stream.
   const metadata = searchResults ? { results: searchResults.map(({ content: _content, ...result }) => result) } : null;
   const encoder = new TextEncoder();
-  const stream = upstream.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+  const stream = responseBody.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
     start(controller) {
-      if (metadata) controller.enqueue(encoder.encode("event: search_results\ndata: " + JSON.stringify(metadata) + "\n\n"));
+      if (metadata) controller.enqueue(encoder.encode("event: search_results\\ndata: " + JSON.stringify(metadata) + "\\n\\n"));
     },
   }));
   return new Response(stream, {
