@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 const BUCKET = "meai-files";
 const MAX_EXTRACT_BYTES = 15 * 1024 * 1024;
-const MAX_TEXT_CHARS = 200_000;
+const MAX_TEXT_CHARS = 200_000;\nconst OCR_MAX_PAGES = 12;\n\nasync function recognizeImage(image: Buffer) {\n  const { createWorker } = await import("tesseract.js");\n  const worker = await createWorker("ara+eng", 1, {\n    langPath: "https://tessdata.projectnaptha.com/4.0.0",\n    gzip: true,\n    logger: () => undefined,\n  });\n  try {\n    const result = await worker.recognize(image);\n    return normalizeText(result.data.text || "");\n  } finally {\n    await worker.terminate();\n  }\n}\n
 
 function fail(message: string, status: number) {
   return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
@@ -77,7 +77,7 @@ async function extractDocument(buffer: Buffer, name: string, mimeType: string) {
   if (["txt", "md", "csv", "tsv", "json", "yaml", "yml", "toml", "html", "xml", "js", "jsx", "ts", "tsx", "py", "css", "sql", "log", "sh", "env"].includes(extension) || mimeType.startsWith("text/")) {
     return { text: normalizeText(new TextDecoder("utf-8", { fatal: false }).decode(buffer)), format: extension || "text", pages: null, truncated: buffer.length > MAX_TEXT_CHARS };
   }
-  throw new Error("نوع الملف غير مدعوم للاستخراج حاليًا. المدعوم: PDF وDOCX وXLSX وXLS وCSV والملفات النصية. استخراج النص من الصور يحتاج خدمة OCR غير مهيأة.");
+  throw new Error("نوع الملف غير مدعوم. المدعوم: PDF وDOCX وXLSX وXLS وCSV والملفات النصية والصور PNG وJPG وWEBP وTIFF.");
 }
 
 export async function POST(request: NextRequest) {
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
     const bytes = Buffer.from(await downloaded.arrayBuffer());
     if (!bytes.length || bytes.length > MAX_EXTRACT_BYTES) return fail("حجم الملف الفعلي يتجاوز حد الاستخراج.", 413);
     const extracted = await extractDocument(bytes, name, mimeType);
-    if (!extracted.text.trim()) return fail("لم يتم العثور على نص قابل للاستخراج. قد يكون PDF ممسوحًا ضوئيًا ويحتاج OCR.", 422);
+    if (!extracted.text.trim()) return fail("لم يتم العثور على نص قابل للاستخراج حتى بعد محاولة OCR. قد تكون الصورة غير واضحة أو اللغة غير مدعومة.", 422);
     return Response.json({
       ok: true,
       name,
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       characters: extracted.text.length,
       pages: extracted.pages,
       truncated: extracted.truncated,
-      extraction: "server",
+      extraction: extracted.ocrUsed ? "ocr" : "server",\n      ocrUsed: Boolean(extracted.ocrUsed),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "تعذر استخراج محتوى الملف.";
