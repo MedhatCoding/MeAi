@@ -16,6 +16,17 @@ import VideoSection from "./sections/video";
 import WorkspaceSection from "./sections/workspace";
 
 
+function inferMimeType(name: string) {
+  const ext = name.toLowerCase().split(".").pop() || "";
+  const types: Record<string,string> = {
+    png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", jfif:"image/jpeg",
+    webp:"image/webp", gif:"image/gif", bmp:"image/bmp", svg:"image/svg+xml",
+    tif:"image/tiff", tiff:"image/tiff", heic:"image/heic", heif:"image/heif",
+    avif:"image/avif", pdf:"application/pdf"
+  };
+  return types[ext] || "application/octet-stream";
+}
+
 export default function Home() {
   const [section, setSection] = useState<Section>("chat");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -572,6 +583,7 @@ ${data.error.name}: ${data.error.value}` : ""));
         if (file.size <= 0) { skipped.push(file.name + " (ملف فارغ)"); continue; }
         if (file.size > 50 * 1024 * 1024) { skipped.push(file.name + " (أكبر من 50MB)"); continue; }
         const safeName = file.name.replace(/[^\\p{L}\\p{N}._-]/gu, "_").slice(-180) || "file";
+        const mimeType = file.type || inferMimeType(file.name);
         const path = `${storageConfig.userId}/${crypto.randomUUID()}-${safeName}`;
         setCloudUploadProgress(`جاري رفع ${file.name} • 0% (من ${incoming.length})`);
 
@@ -589,7 +601,7 @@ ${data.error.name}: ${data.error.value}` : ""));
                 metadata: {
                   bucketName: "meai-files",
                   objectName: path,
-                  contentType: file.type || "application/octet-stream",
+                  contentType: mimeType,
                   cacheControl: "3600",
                 },
                 onError: reject,
@@ -610,7 +622,7 @@ ${data.error.name}: ${data.error.value}` : ""));
               headers: {
                 authorization: `Bearer ${accountToken}`,
                 apikey: config!.anonKey!,
-                "Content-Type": file.type || "application/octet-stream",
+                "Content-Type": mimeType,
                 "x-upsert": "false",
               },
               body: file,
@@ -624,7 +636,7 @@ ${data.error.name}: ${data.error.value}` : ""));
           const register = await fetch("/api/account/storage", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
-            body: JSON.stringify({ action: "register", name: file.name, path, mimeType: file.type || "application/octet-stream", size: file.size }),
+            body: JSON.stringify({ action: "register", name: file.name, path, mimeType: mimeType, size: file.size }),
           });
           const registered = await register.json();
           if (!register.ok) throw new Error(registered.error || "تم رفع الملف لكن تعذر تسجيله في قائمة الملفات.");
@@ -636,7 +648,7 @@ ${data.error.name}: ${data.error.value}` : ""));
               const extractionResponse = await fetch("/api/files/extract", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
-                body: JSON.stringify({ path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size }),
+                body: JSON.stringify({ path, name: file.name, mimeType: mimeType, size: file.size }),
                 cache: "no-store",
               });
               const extractionData = await extractionResponse.json() as { text?: string; error?: string };
@@ -646,7 +658,7 @@ ${data.error.name}: ${data.error.value}` : ""));
               extractionError = error instanceof Error ? error.message : "تعذر استخراج محتوى الملف.";
             }
             setPendingAttachments(old => [...old.filter(item => item.name !== file.name), {
-              name: file.name, content, mimeType: file.type || "application/octet-stream", size: file.size,
+              name: file.name, content, mimeType: mimeType, size: file.size,
               ...(extractionError ? { extractionError } : {}),
             }]);
             if (content) {
