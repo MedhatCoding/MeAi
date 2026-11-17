@@ -139,7 +139,8 @@ export async function POST(request: NextRequest) {
       return [{ name: doc.name.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200), content: doc.content.slice(0, 200000) }];
     }) : [];
     docContext = docs.length ? docs.map((d,i) => `[ملف مرفق ${i+1}: ${d.name}]\n${d.content}`).join("\n\n").slice(0, 200_000) : "";
-    const rawImages = Array.isArray(body.images) ? body.images.slice(0, 4) : [];
+    if (Array.isArray(body.images) && body.images.length > 4) return jsonError("يمكن تحليل 4 صور كحد أقصى في الرسالة الواحدة.", 413);
+    const rawImages = Array.isArray(body.images) ? body.images : [];
     let totalImageChars = 0;
     visionImages = rawImages.flatMap((item) => {
       if (!item || typeof item !== "object") return [];
