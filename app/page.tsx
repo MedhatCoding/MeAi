@@ -16,6 +16,14 @@ import VideoSection from "./sections/video";
 import WorkspaceSection from "./sections/workspace";
 
 
+function inferChatAction(text: string): ChatMode | "video" {
+  const value = text.normalize("NFKC").toLowerCase();
+  if (/(فيديو|مقطع فيديو|انشئ فيديو|أنشئ فيديو|ولد فيديو|ولّد فيديو|generate a video|create a video)/i.test(value)) return "video";
+  if (/(ارسم|ولد صورة|ولّد صورة|انشئ صورة|أنشئ صورة|صمم صورة|صمّم صورة|اعمل صورة|generate an image|create an image)/i.test(value)) return "image";
+  if (/(نفذ المهمة|نفّذ المهمة|نفذ الخطوات|نفّذ الخطوات|شغل الكود|شغّل الكود|نفذ الكود|نفّذ الكود|اكتب برنامج|ابني لي موقع|أنشئ ملف|انشئ ملف|اعمل تقرير|جهز تقرير|نفذ المشروع|build me a|create a file|create a report)/i.test(value)) return "agent";
+  return "chat";
+}
+
 function inferMimeType(name: string) {
   const ext = name.toLowerCase().split(".").pop() || "";
   const types: Record<string,string> = {
@@ -484,19 +492,23 @@ ${data.error.name}: ${data.error.value}` : ""));
   async function handleSend(value = input, mode = composerMode) {
     const text = value.trim();
     if ((!text && !(mode === "chat" && pendingAttachments.length)) || busy) return;
-    if (mode === "chat") { await sendMessage(text); return; }
+    const effectiveMode = mode === "chat" && pendingAttachments.length === 0 ? inferChatAction(text) : mode;
+    if (effectiveMode === "chat") { await sendMessage(text); return; }
     const stamp = () => new Date().toLocaleTimeString("ar-EG", {hour:"2-digit",minute:"2-digit"});
     const next: Message[] = [...messages, { role: "user", content: text, time: stamp() }, { role: "assistant", content: "", time: stamp() }];
     setMessages(next); setInput(""); setBusy(true); setNotice("");
     const patchLast = (patch: Partial<Message>) => setMessages(old => old.map((m,i) => i === old.length-1 ? { ...m, ...patch } : m));
     try {
-      if (mode === "image") {
+      if (effectiveMode === "video") {
+        patchLast({ content: "فهمت إنك تريد إنشاء فيديو. لكن خدمة توليد الفيديو غير متاحة حاليًا في إعدادات MeAI، لذلك لم يتم إنشاء فيديو. أقدر أساعدك في تجهيز السيناريو والوصف والمشاهد لحين تفعيل مزود فيديو فعلي." });
+        return;
+      } else if (effectiveMode === "image") {
         patchLast({ content: "جارٍ توليد الصورة..." });
         const res = await fetch("/api/images/generate", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ prompt: text, aspect: "1:1", style: "واقعي" }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "تعذر توليد الصورة.");
         patchLast({ content: "اتفضل الصورة المولّدة. تحب أعدّل فيها أي تفاصيل؟", image: String(data.image || "") });
-      } else if (mode === "research") {
+      } else if (effectiveMode === "research") {
         patchLast({ content: "جارٍ البحث على الويب..." });
         const res = await fetch("/api/search", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ query: text }) });
         const data = await res.json();
@@ -509,7 +521,7 @@ ${data.error.name}: ${data.error.value}` : ""));
         const history = next.slice(0, -1);
         history[history.length - 1] = { ...history[history.length - 1], content: enriched };
         await streamInto(history, "وجدت " + results.length + " نتائج لبحثك، ودي خلاصة التحليل:\n\n", true);
-      } else if (mode === "agent") {
+      } else if (effectiveMode === "agent") {
         patchLast({ content: "جارٍ تنفيذ المهمة بالوكيل والأدوات..." });
         const data = await requestAgentExecution(text);
         const tools = Array.isArray(data.toolsUsed) ? (data.toolsUsed as string[]).filter(t => typeof t === "string") : [];
@@ -757,7 +769,7 @@ ${doc.content.slice(0,40000)}
     {(sidebarOpen || mobileNavOpen) && <aside className={`sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
       <div className="brand-row"><div className="brand-mark"><Sparkles size={20}/></div><div className="brand-copy"><b>Medhat AI</b><span>مساعدك الذكي</span></div><button className="icon-btn collapse-btn" aria-label="إخفاء القائمة" onClick={() => setSidebarOpen(false)}><PanelLeftClose size={18}/></button></div>
       <button className="new-chat" onClick={() => { newChat(); }}><SquarePen size={17}/> محادثة جديدة <span>⌘ K</span></button>
-      <div className="nav-scroll">{["الرئيسية","الأدوات","النظام"].map(group => <div className="nav-group" key={group}><div className="group-label">{group}</div>{nav.filter(n=>n.group===group).map(n=><button key={n.id} className={`nav-item ${section===n.id?"active":""}`} onClick={()=>changeSection(n.id)}><n.icon size={18}/><span>{n.label}</span>{n.id==="agent"&&<i className="nav-dot"/>}</button>)}</div>)}
+      <div className="nav-scroll">{["الرئيسية","الأدوات","النظام"].map(group => <div className="nav-group" key={group}><div className="group-label">{group}</div>{nav.filter(n=>n.group===group && ["chat","tasks","workspace","memory","settings"].includes(n.id)).map(n=><button key={n.id} className={`nav-item ${section===n.id?"active":""}`} onClick={()=>changeSection(n.id)}><n.icon size={18}/><span>{n.label}</span>{n.id==="agent"&&<i className="nav-dot"/>}</button>)}</div>)}
         <div className="side-divider"/><div className="group-label">سجل المحادثات</div><div className="chats-scroll">{conversations.length ? conversations.map(c => <div key={c.id} className={"chat-item" + (activeId === c.id && section === "chat" ? " active" : "")} onClick={() => switchConversation(c.id)}><MessageCircle size={15}/><span>{c.title || "محادثة جديدة"}</span><button className="chat-del" aria-label="حذف المحادثة" onClick={e => deleteConversation(c.id, e)}><Trash2 size={13}/></button></div>) : <div className="empty-history">لا توجد محادثات سابقة بعد</div>}</div>
       </div>
       <div className="sidebar-bottom"><div className="connection"><span className="status-light"/><div><b>مساحة شخصية</b><small>البيانات محفوظة على الجهاز</small></div><ShieldCheck size={17}/></div><button className="profile-row" onClick={()=>changeSection("settings")}><div className="avatar">م</div><div><b>Medhat</b><small>المساعد الشخصي</small></div><MoreHorizontal size={18}/></button></div>
@@ -780,6 +792,6 @@ ${doc.content.slice(0,40000)}
       <input ref={fileRef} type="file" multiple hidden onChange={e=>uploadFiles(e.target.files)}/>
       
     </section>
-    <nav className="mobile-bottom-nav">{nav.filter(n=>["chat","agent","tasks","workspace","images"].includes(n.id)).map(n=><button key={n.id} className={section===n.id?"selected":""} onClick={()=>changeSection(n.id)}><n.icon size={19}/><span>{n.label==="توليد الصور"?"الصور":n.label==="مساحة العمل"?"الملفات":n.label==="الوكيل الذكي"?"الوكيل":n.label}</span></button>)}<button onClick={()=>setMobileNavOpen(v=>!v)}><Menu size={19}/><span>المزيد</span></button></nav>
+    <nav className="mobile-bottom-nav">{nav.filter(n=>["chat","tasks","workspace","settings"].includes(n.id)).map(n=><button key={n.id} className={section===n.id?"selected":""} onClick={()=>changeSection(n.id)}><n.icon size={19}/><span>{n.label==="مساحة العمل"?"الملفات":n.label==="الإعدادات"?"الإعدادات":n.label}</span></button>)}<button onClick={()=>setMobileNavOpen(v=>!v)}><Menu size={19}/><span>المزيد</span></button></nav>
   </main>;
 }
