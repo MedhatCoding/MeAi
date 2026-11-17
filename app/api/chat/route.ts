@@ -259,7 +259,15 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
       body: JSON.stringify(visionImages.length && activeModelConfig.provider === "cloudflare"
-        ? { messages: groundedMessages, image: visionImages[0].dataUrl, stream: true, temperature: 0.6, max_tokens: 1800 }
+        ? {
+            messages: groundedMessages.map((message, index) => index === groundedMessages.map(item => item.role).lastIndexOf("user")
+              ? { ...message, content: message.content + "\\n\\nحلّل الصورة المرفقة بصريًا، واستخرج النصوص والجداول والعناصر المرئية، واذكر بوضوح ما لا يمكن قراءته أو الجزم به." }
+              : message),
+            image: visionImages[0].dataUrl,
+            stream: true,
+            temperature: 0.6,
+            max_tokens: 1800,
+          }
         : { model, messages: providerMessages, stream: true, temperature: 0.6 }),
       signal: request.signal,
       cache: "no-store",
