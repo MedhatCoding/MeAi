@@ -208,7 +208,13 @@ export async function POST(request: NextRequest) {
         if (/(?:متوسط|average).{0,100}(?:1\s*(?:إلى|الى|to|through)\s*10000|1\s*[-–]\s*10000|1\s+and\s+10000)/i.test(task) ||
             /(?:1\s*(?:إلى|الى|to|through)\s*10000|1\s*[-–]\s*10000).{0,100}(?:متوسط|average)/i.test(task)) {
           // Deterministic, transparent Python for the explicitly requested arithmetic check.
-          generatedCode = "numbers = range(1, 10001)\\ncount = len(numbers)\\ntotal = sum(numbers)\\naverage = total / count\\nprint(f\\"Count: {count}\\")\\nprint(f\\"Sum: {total}\\")\\nprint(f\\"Average: {average}\\")";
+          generatedCode = `numbers = range(1, 10001)
+count = len(numbers)
+total = sum(numbers)
+average = total / count
+print(f"Count: {count}")
+print(f"Sum: {total}")
+print(f"Average: {average}")`;
         }
         const codePrompt = generatedCode ? null : await fetch(endpoint, {
           method: "POST",
