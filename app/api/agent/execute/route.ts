@@ -302,11 +302,21 @@ export async function POST(request: NextRequest) {
     if (codeExecutionSucceeded && codeExecutionSummary) {
       finalAnswer += "\n\n**تأكيد التنفيذ الفعلي داخل E2B:**\n" + codeExecutionSummary + "\nالإنترنت الخارجي معطّل عمدًا داخل المختبر؛ وهذا لا يمنع تنفيذ الحسابات المحلية.";
     }
-    const toolsUsed = [...(searchUsed ? ["web_search"] : []), ...(githubReadSucceeded ? ["github_read"] : []), ...(githubFilesRead > 0 ? ["github_source_read"] : []), ...(docs ? ["file_analysis"] : []), ...(codeExecutionSucceeded ? ["code_execution"] : [])];
+    const wantsArtifact = /(?:أنشئ|انشئ|اعمل|جهّز|جهز|احفظ|صدّر|صدر).{0,50}(?:ملف|تقرير|مستند)|(?:file|report|document).{0,40}(?:create|generate|save|export)|(?:create|generate|save|export).{0,40}(?:file|report|document)/i.test(task);
+    const artifact = wantsArtifact && finalAnswer.trim()
+      ? {
+          filename: "meai-agent-report.md",
+          content: `# تقرير تنفيذ المهمة\\n\\n${finalAnswer.trim().slice(0, 12000)}\\n\\n---\\nتم إنشاء هذا الملف من نتيجة الوكيل. راجع المصادر المرفقة داخل التطبيق عند توفر بحث ويب.`,
+          summary: "تقرير Markdown يتضمن نتيجة المهمة والأدلة والمخرجات التي أكدتها الأدوات.",
+          format: "markdown" as const,
+        }
+      : null;
+    if (artifact) toolTrace.push({ tool: "artifact_creation", status: "success", detail: "تم إنشاء ملف Markdown من الإجابة النهائية ليُحفظ في مساحة العمل." });
+    const toolsUsed = [...(searchUsed ? ["web_search"] : []), ...(githubReadSucceeded ? ["github_read"] : []), ...(githubFilesRead > 0 ? ["github_source_read"] : []), ...(docs ? ["file_analysis"] : []), ...(codeExecutionSucceeded ? ["code_execution"] : []), ...(artifact ? ["artifact_creation"] : [])];
     if (docs) toolTrace.push({ tool: "file_analysis", status: "success", detail: `تم إرفاق ${documents.length} ملف/ملفات للتحليل.` });
     else toolTrace.push({ tool: "file_analysis", status: "skipped", detail: "لم يرفق المستخدم ملفات." });
     toolTrace.unshift({ tool: "agent_planner", status: agentPlan.plannerStatus === "success" ? "success" : agentPlan.plannerStatus === "skipped" ? "skipped" : "unavailable", detail: agentPlan.plannerStatus === "success" ? `اختار النموذج الأدوات: ${agentPlan.tools.join("، ") || "لا توجد أدوات خارجية"}.` : agentPlan.plannerStatus === "skipped" ? "لم تكن هناك حاجة لأداة خارجية؛ تم تجاوز التخطيط الإضافي لتقليل التأخير." : "تعذر تخطيط الأدوات؛ استُخدم اختيار احتياطي محدود." });
-    return Response.json({ answer: finalAnswer, searchUsed, searchSources, toolsUsed, toolTrace, codeExecution: wantsCodeExecution ? { attempted: true, success: codeExecutionSucceeded } : { attempted: false, success: false }, provider: modelConfig.provider, limitations: ["الوكيل ينجز المهام المعرفية ويستخدم البحث إذا كان مهيأً؛ لا يملك صلاحية عامة للتحكم في كل حساب أو موقع. الموصلات الخارجية تحتاج ربطًا وصلاحيات فعلية."] }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ answer: finalAnswer, artifact, searchUsed, searchSources, toolsUsed, toolTrace, codeExecution: wantsCodeExecution ? { attempted: true, success: codeExecutionSucceeded } : { attempted: false, success: false }, provider: modelConfig.provider, limitations: ["الوكيل ينجز المهام المعرفية ويستخدم البحث إذا كان مهيأً؛ لا يملك صلاحية عامة للتحكم في كل حساب أو موقع. الموصلات الخارجية تحتاج ربطًا وصلاحيات فعلية."] }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return fail("انتهت مهلة التنفيذ أو تعذر الاتصال بمزوّد الذكاء الاصطناعي.", 502);
   }
