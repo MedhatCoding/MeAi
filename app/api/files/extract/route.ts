@@ -39,8 +39,8 @@ async function authenticate(request: NextRequest) {
 async function createOcrWorker() {
   const { createWorker } = await import("tesseract.js");
   return createWorker("ara+eng", 1, {
-    // Pin the WASM core to a CDN build because Vercel output tracing can omit optional SIMD binaries.
-    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0",
+    // In Node.js, Tesseract.js resolves its core from tesseract.js-core.
+    // next.config.ts explicitly traces the package's WASM assets into this route.
     langPath: "https://tessdata.projectnaptha.com/4.0.0",
     gzip: true,
     logger: () => undefined,
