@@ -39,7 +39,7 @@ async function createOcrWorker() {
   const { createWorker } = await import("tesseract.js");
   return createWorker("ara+eng", 1, {
     // Pin the WASM core to a CDN build because Vercel output tracing can omit optional SIMD binaries.
-    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0/tesseract-core-simd.wasm.js",
+    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0",
     langPath: "https://tessdata.projectnaptha.com/4.0.0",
     gzip: true,
     logger: () => undefined,
