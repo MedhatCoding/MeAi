@@ -14,7 +14,10 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "@e2b/code-interpreter": "^2.5.0",
-    "tus-js-client": "^4.3.1"
+    "tus-js-client": "^4.3.1",
+    "mammoth": "^1.9.1",
+    "pdfjs-dist": "^4.10.38",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
