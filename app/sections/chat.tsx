@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { ArrowUp, Bot, Check, ChevronDown, Copy, ExternalLink, Image as ImageIcon, MessageCircle, Paperclip, Search, Send, ShieldCheck, Sparkles, Code2 } from "lucide-react";
+import { ArrowUp, Check, Copy, ExternalLink, Paperclip, Send, ShieldCheck, Sparkles, Code2, Search, Image as ImageIcon, Bot } from "lucide-react";
 import type { ChatMode, Message } from "../lib/shared";
 
 const modes: { id: ChatMode; label: string; icon: typeof MessageCircle; placeholder: string }[] = [
@@ -56,7 +56,7 @@ export default function ChatSection({
           <div className="eyebrow"><span/> مساحة الذكاء الاصطناعي الكاملة بتاعتك</div>
           <h1>أهلًا بيك، <em>مدحت</em></h1>
           <p className="welcome-sub">كل حاجة في مكان واحد: محادثة، بحث بمصادر، توليد صور، ووكيل ينفذ مهام كاملة. من غير حدود اشتراكات.</p>
-          <div className="suggestion-grid">{suggestions.map(s => <button key={s.title} className="suggestion-card" onClick={() => { setComposerMode(s.mode); void handleSend(s.prompt, s.mode); }}><div className="suggestion-icon"><s.icon size={19}/></div><span>{s.title}</span><ArrowUp size={15}/></button>)}</div>
+          <div className="suggestion-grid">{suggestions.map(s => <button key={s.title} className="suggestion-card" onClick={() => { setComposerMode("chat"); void handleSend(s.prompt, "chat"); }}><div className="suggestion-icon"><s.icon size={19}/></div><span>{s.title}</span><ArrowUp size={15}/></button>)}</div>
         </div>
       ) : (
         <div className="conversation">
@@ -85,13 +85,13 @@ export default function ChatSection({
               <button type="button" onClick={() => setPendingAttachments(old => old.filter((_,i) => i !== index))} aria-label={"إزالة " + file.name}>×</button>
             </div>)}
           </div> : null}
-          <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); } }} placeholder={activeMode.placeholder} rows={1}/>
+          <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(input, "chat"); } }} placeholder="اكتب طلبك هنا... البحث والتنفيذ وإنشاء الصور يتم تلقائيًا حسب طلبك." rows={1}/>
           <div className="composer-toolbar">
             <div className="composer-tools">
-              <button className="tool-btn" onClick={() => fileRef.current?.click()} aria-label="إرفاق ملف"><Paperclip size={16}/></button>
-              {modes.map(m => <button key={m.id} type="button" className={"mode-chip" + (composerMode === m.id ? " selected" : "")} onClick={() => setComposerMode(m.id)}><m.icon size={14}/><span>{m.label}</span></button>)}
+              <button className="tool-btn" type="button" onClick={() => fileRef.current?.click()} aria-label="إرفاق ملف"><Paperclip size={19}/><span>إرفاق</span></button>
+              <span className="auto-mode-label"><Sparkles size={15}/> اختيار الأدوات تلقائيًا</span>
             </div>
-            <div className="send-group"><span className="model-pill"><Sparkles size={13}/> {activeMode.label} <ChevronDown size={13}/></span><button className="send-btn" onClick={() => void handleSend()} disabled={(!input.trim() && pendingAttachments.length === 0) || busy} aria-label="إرسال"><Send size={17}/></button></div>
+            <div className="send-group"><button className="send-btn" onClick={() => void handleSend(input, "chat")} disabled={(!input.trim() && pendingAttachments.length === 0) || busy} aria-label="إرسال"><Send size={19}/></button></div>
           </div>
         </div>
         <div className="privacy-note"><ShieldCheck size={13}/> محادثة وبحث وصور ووكيل من مكان واحد، بلا حدود اشتراكات</div>
