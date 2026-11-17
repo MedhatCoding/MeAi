@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
+import { getVisionModelConfig } from "../../_lib/model-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,12 +91,44 @@ async function extractPdf(buffer: Buffer) {
   return { text: extractedText, pages: pdf.numPages, truncated: pdf.numPages > pageLimit || (ocrUsed && pdf.numPages > OCR_MAX_PAGES), ocrUsed };
 }
 
+async function extractImageWithGemini(buffer: Buffer, mimeType: string): Promise<string | null> {
+  const config = getVisionModelConfig();
+  const supported = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (config?.provider !== "gemini" || !supported.includes(mimeType.toLowerCase()) || buffer.length > 8 * 1024 * 1024) return null;
+  const response = await fetch(config.endpoint, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + config.token, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: config.model,
+      stream: false,
+      temperature: 0,
+      messages: [
+        { role: "system", content: "أنت محرك OCR دقيق. استخرج النص الظاهر في الصورة حرفيًا وبنفس لغة النص، وحافظ على ترتيب الأسطر والجداول قدر الإمكان. لا تلخص ولا تشرح ولا تخمّن الكلمات غير الواضحة؛ ضع [غير مقروء] عند الحاجة. أعد النص المستخرج فقط." },
+        { role: "user", content: [
+          { type: "text", text: "استخرج كل النص الظاهر في هذه الصورة بدقة." },
+          { type: "image_url", image_url: { url: "data:" + mimeType + ";base64," + buffer.toString("base64") } },
+        ] },
+      ],
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(25000),
+  });
+  if (!response.ok) throw new Error("فشل استخراج النص عبر Gemini (HTTP " + response.status + ").");
+  const payload = await response.json() as { choices?: { message?: { content?: unknown } }[] };
+  const content = payload.choices?.[0]?.message?.content;
+  return typeof content === "string" && content.trim() ? content : null;
+}
+
 async function extractDocument(buffer: Buffer, name: string, mimeType: string) {
   const extension = name.split(".").pop()?.toLowerCase() || "";
   if (extension === "pdf" || mimeType === "application/pdf") {
     return { ...(await extractPdf(buffer)), format: "pdf" };
   }
   if (["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"].includes(extension) || mimeType.startsWith("image/")) {
+    const geminiText = await extractImageWithGemini(buffer, mimeType);
+    if (geminiText) {
+      return { text: normalizeText(geminiText), format: extension || "image", pages: 1, truncated: false, ocrUsed: true };
+    }
     const worker = await createOcrWorker();
     try {
       const result = await worker.recognize(buffer);
