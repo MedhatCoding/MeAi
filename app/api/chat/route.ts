@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
   if (rateError) return rateError;
   let messages: ChatMessage[];
   let docContext = "";
+  let docs: { name: string; content: string }[] = [];
   let skipWebSearch = false;
   try {
     // Reject oversized payloads before JSON parsing to reduce memory/cost abuse.
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
     if (totalChars > 400_000) return jsonError("حجم سياق المحادثة أكبر من الحد المسموح (400 ألف حرف).", 413);
     // Bound provider cost while retaining enough recent conversational context.
     messages = messages.slice(-100);
-    const docs = Array.isArray(body.documents) ? body.documents.slice(0, 40).flatMap((item) => {
+    docs = Array.isArray(body.documents) ? body.documents.slice(0, 40).flatMap((item) => {
       if (!item || typeof item !== "object") return [];
       const doc = item as {name?:unknown;content?:unknown};
       if (typeof doc.name !== "string" || typeof doc.content !== "string") return [];
