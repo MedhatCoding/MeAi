@@ -18,9 +18,9 @@ import WorkspaceSection from "./sections/workspace";
 
 function inferChatAction(text: string): ChatMode | "video" {
   const value = text.normalize("NFKC").toLowerCase();
-  if (/(فيديو|مقطع فيديو|انشئ فيديو|أنشئ فيديو|ولد فيديو|ولّد فيديو|generate a video|create a video)/i.test(value)) return "video";
+  if (/(?:اعمل|أنشئ|انشئ|ولد|ولّد|صمم|صمّم|جهز|جهّز).{0,12}فيديو|(?:generate|create|make).{0,12}video/i.test(value)) return "video";
   if (/(ارسم|ولد صورة|ولّد صورة|انشئ صورة|أنشئ صورة|صمم صورة|صمّم صورة|اعمل صورة|generate an image|create an image)/i.test(value)) return "image";
-  if (/(نفذ المهمة|نفّذ المهمة|نفذ الخطوات|نفّذ الخطوات|شغل الكود|شغّل الكود|نفذ الكود|نفّذ الكود|اكتب برنامج|ابني لي موقع|أنشئ ملف|انشئ ملف|اعمل تقرير|جهز تقرير|نفذ المشروع|build me a|create a file|create a report)/i.test(value)) return "agent";
+  if (/(نفذ المهمة|نفّذ المهمة|نفذ الخطوات|نفّذ الخطوات|شغل الكود|شغّل الكود|نفذ الكود|نفّذ الكود|اكتب برنامج|ابني لي موقع|أنشئ ملف|انشئ ملف|اعمل تقرير|جهز تقرير|نفذ المشروع|استخدم الوكيل|شغل الوكيل|شغّل الوكيل|build me a|create a file|create a report|use the agent)/i.test(value)) return "agent";
   return "chat";
 }
 
@@ -527,6 +527,12 @@ ${data.error.name}: ${data.error.value}` : ""));
         const tools = Array.isArray(data.toolsUsed) ? (data.toolsUsed as string[]).filter(t => typeof t === "string") : [];
         const trace = Array.isArray(data.toolTrace) ? (data.toolTrace as AgentTraceItem[]).filter(t => t && typeof t.tool === "string" && typeof t.detail === "string") : [];
         const sources = Array.isArray(data.searchSources) ? (data.searchSources as AgentSource[]).filter(s => s && typeof s.title === "string" && typeof s.url === "string").map(s => ({ title: s.title, url: s.url, snippet: typeof s.date === "string" ? "التاريخ: " + s.date : "", date: typeof s.date === "string" ? s.date : null, position: null })) : [];
+        if (data.artifact && typeof data.artifact.filename === "string" && typeof data.artifact.content === "string") {
+          const savedArtifact = { filename: data.artifact.filename, content: data.artifact.content, summary: typeof data.artifact.summary === "string" ? data.artifact.summary : "ملف أنشأه الوكيل", createdAt: new Date().toISOString() };
+          const nextArtifacts = [savedArtifact, ...artifacts].slice(0, 50);
+          setArtifacts(nextArtifacts);
+          try { localStorage.setItem("medhat-artifacts-v1", JSON.stringify(nextArtifacts)); } catch {}
+        }
         patchLast({ content: String(data.answer || ""), tools, trace, sources });
       }
     } catch (e) {
