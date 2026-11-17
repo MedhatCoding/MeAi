@@ -31,7 +31,7 @@ export function getModelConfig(): ModelConfig | null {
   const model = process.env.OPENAI_MODEL;
   const compatible: ModelConfig | null = base && key && model ? {
     provider: "openai-compatible",
-    endpoint: base.replace(/\/+$/, "") + "/chat/completions",
+    endpoint: base.replace(/\\/+$/, "") + "/chat/completions",
     token: key,
     model,
   } : null;
@@ -54,26 +54,26 @@ export function getConfiguredModelProviders(): string[] {
   return providers;
 }
 
-
-// Vision is routed explicitly to Cloudflare Llama Vision or Gemini, never to the default text-only model.
+// Prefer Gemini Vision when configured; Cloudflare Vision remains the fallback.
+// This avoids blocking image understanding on Cloudflare's initial Meta license prompt.
 export function getVisionModelConfig(): ModelConfig | null {
-  const cloudflareId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const cloudflareToken = process.env.CLOUDFLARE_API_TOKEN;
-  if (cloudflareId && cloudflareToken) {
-    const model = process.env.CLOUDFLARE_VISION_MODEL || "@cf/meta/llama-3.2-11b-vision-instruct";
+  const key = process.env.GEMINI_API_KEY;
+  if (key) {
     return {
-      provider: "cloudflare",
-      endpoint: `https://api.cloudflare.com/client/v4/accounts/${cloudflareId}/ai/run/${model}`,
-      token: cloudflareToken,
-      model,
+      provider: "gemini",
+      endpoint: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+      token: key,
+      model: process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || "gemini-3.8-flash",
     };
   }
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+  const cloudflareId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const cloudflareToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (!cloudflareId || !cloudflareToken) return null;
+  const model = process.env.CLOUDFLARE_VISION_MODEL || "@cf/meta/llama-3.2-11b-vision-instruct";
   return {
-    provider: "gemini",
-    endpoint: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    token: key,
-    model: process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || "gemini-3.8-flash",
+    provider: "cloudflare",
+    endpoint: `https://api.cloudflare.com/client/v4/accounts/${cloudflareId}/ai/run/${model}`,
+    token: cloudflareToken,
+    model,
   };
 }
