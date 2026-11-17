@@ -26,8 +26,8 @@ interface ChatSectionProps {
   busy: boolean;
   endRef: RefObject<HTMLDivElement | null>;
   fileRef: RefObject<HTMLInputElement | null>;
-  pendingAttachments: {name:string;content:string;mimeType:string;size:number}[];
-  setPendingAttachments: Dispatch<SetStateAction<{name:string;content:string;mimeType:string;size:number}[]>>;
+  pendingAttachments: {name:string;content:string;mimeType:string;size:number;extractionError?:string}[];
+  setPendingAttachments: Dispatch<SetStateAction<{name:string;content:string;mimeType:string;size:number;extractionError?:string}[]>>;
   composerMode: ChatMode;
   setComposerMode: Dispatch<SetStateAction<ChatMode>>;
   handleSend: (value?: string, mode?: ChatMode) => void | Promise<void>;
@@ -81,7 +81,7 @@ export default function ChatSection({
         <div className="composer">
           {pendingAttachments.length > 0 ? <div className="attachment-list" aria-label="الملفات المرفقة">
             {pendingAttachments.map((file,index) => <div className="attachment-chip" key={file.name + index}>
-              <Paperclip size={14}/><span>{file.name}</span><small>{file.content ? "جاهز للتحليل" : "مرفوع — القراءة غير مدعومة"}</small>
+              <Paperclip size={14}/><span>{file.name}</span><small>{file.content ? "تم استخراج النص" : (file.extractionError || "تعذر استخراج النص")}</small>
               <button type="button" onClick={() => setPendingAttachments(old => old.filter((_,i) => i !== index))} aria-label={"إزالة " + file.name}>×</button>
             </div>)}
           </div> : null}
@@ -91,7 +91,7 @@ export default function ChatSection({
               <button className="tool-btn" onClick={() => fileRef.current?.click()} aria-label="إرفاق ملف"><Paperclip size={16}/></button>
               {modes.map(m => <button key={m.id} type="button" className={"mode-chip" + (composerMode === m.id ? " selected" : "")} onClick={() => setComposerMode(m.id)}><m.icon size={14}/><span>{m.label}</span></button>)}
             </div>
-            <div className="send-group"><span className="model-pill"><Sparkles size={13}/> {activeMode.label} <ChevronDown size={13}/></span><button className="send-btn" onClick={() => void handleSend()} disabled={!input.trim() || busy} aria-label="إرسال"><Send size={17}/></button></div>
+            <div className="send-group"><span className="model-pill"><Sparkles size={13}/> {activeMode.label} <ChevronDown size={13}/></span><button className="send-btn" onClick={() => void handleSend()} disabled={(!input.trim() && pendingAttachments.length === 0) || busy} aria-label="إرسال"><Send size={17}/></button></div>
           </div>
         </div>
         <div className="privacy-note"><ShieldCheck size={13}/> محادثة وبحث وصور ووكيل من مكان واحد، بلا حدود اشتراكات</div>
