@@ -71,7 +71,6 @@ async function extractPdf(buffer: Buffer) {
         const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
         const context = canvas.getContext("2d");
         await page.render({
-          canvas: canvas as unknown as HTMLCanvasElement,
           canvasContext: context as unknown as CanvasRenderingContext2D,
           viewport,
         }).promise;
