@@ -34,7 +34,7 @@ export default function Home() {
   const [files, setFiles] = useState<string[]>([]);
   const [cloudFiles, setCloudFiles] = useState<{id:string;name:string;mime_type:string|null;storage_path:string;size_bytes:number;created_at:string}[]>([]);
   const [cloudUploadProgress, setCloudUploadProgress] = useState("");
-  const [pendingAttachments, setPendingAttachments] = useState<{name:string;content:string;mimeType:string;size:number}[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<{name:string;content:string;mimeType:string;size:number;extractionError?:string}[]>([]);
   const [documents, setDocuments] = useState<{name:string;content:string;size:number;updatedAt:string}[]>([]);
   const [artifacts, setArtifacts] = useState<{filename:string;content:string;summary:string;createdAt:string}[]>([]);
   const [artifactBusy, setArtifactBusy] = useState(false);
@@ -395,7 +395,7 @@ ${data.error.name}: ${data.error.value}` : ""));
     const attachedDocs = pendingAttachments.filter(item => item.content).map(item => ({name:item.name,content:item.content}));
     const unsupportedDocs = pendingAttachments.filter(item => !item.content).map(item => ({
       name: item.name,
-      content: "الملف مرفوع ومحفوظ في مساحة العمل السحابية، لكن نوعه أو حجمه غير مدعوم للاستخراج النصي في الإصدار الحالي. أخبر المستخدم بوضوح أنك لا تستطيع قراءة محتواه حتى الآن.",
+      content: "تعذر استخراج محتوى الملف من خدمة الاستخراج المستقلة: " + (item.extractionError || "نوع الملف غير مدعوم حاليًا") + ". أخبر المستخدم بوضوح أنك لا تستطيع قراءة محتواه حتى الآن.",
     }));
     if (unsupportedDocs.length) setNotice("تم إرفاق الملفات بالمحادثة، لكن بعض الأنواع غير النصية محفوظة بالسحابة ولا يمكن قراءة محتواها بعد.");
     setPendingAttachments([]);
@@ -629,15 +629,24 @@ ${data.error.name}: ${data.error.value}` : ""));
           if (!register.ok) throw new Error(registered.error || "تم رفع الملف لكن تعذر تسجيله في قائمة الملفات.");
           uploaded.push(file.name);
           if (attachToChat) {
-            const extension = file.name.split(".").pop()?.toLowerCase() || "";
-            const textLike = file.type.startsWith("text/") || ["txt","md","csv","json","yaml","yml","toml","html","xml","js","jsx","ts","tsx","py","css","sql","log","sh","env"].includes(extension);
             let content = "";
-            if (textLike && file.size <= 1024 * 1024) {
-              try { content = (await file.text()).slice(0, 200000); }
-              catch { content = ""; }
+            let extractionError = "";
+            try {
+              const extractionResponse = await fetch("/api/files/extract", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
+                body: JSON.stringify({ path, name: file.name, mimeType: file.type || "application/octet-stream", size: file.size }),
+                cache: "no-store",
+              });
+              const extractionData = await extractionResponse.json() as { text?: string; error?: string };
+              if (!extractionResponse.ok || !extractionData.text) throw new Error(extractionData.error || "لم يتم استخراج نص من الملف.");
+              content = extractionData.text.slice(0, 200000);
+            } catch (error) {
+              extractionError = error instanceof Error ? error.message : "تعذر استخراج محتوى الملف.";
             }
             setPendingAttachments(old => [...old.filter(item => item.name !== file.name), {
               name: file.name, content, mimeType: file.type || "application/octet-stream", size: file.size,
+              ...(extractionError ? { extractionError } : {}),
             }]);
           }
         } catch (error) {
