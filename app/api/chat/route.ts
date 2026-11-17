@@ -2,7 +2,7 @@ import { rejectCrossOrigin, enforceRateLimit } from "../_lib/guard";
 import { enforceApiAccess } from "../_lib/api-access";
 import { NextRequest } from "next/server";
 import { searchWeb, type WebSearchResult } from "../_lib/web-search";
-import { getModelConfig, type ModelConfig } from "../_lib/model-config";
+import { getModelConfig, getVisionModelConfig, type ModelConfig } from "../_lib/model-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
   let messages: ChatMessage[];
   let docContext = "";
   let docs: { name: string; content: string }[] = [];
+  let visionImages: { name: string; mimeType: string; dataUrl: string }[] = [];
   let skipWebSearch = false;
   try {
     // Reject oversized payloads before JSON parsing to reduce memory/cost abuse.
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
     if (rawBody.length > 6_000_000) {
       return jsonError("حجم الطلب أكبر من الحد المسموح (6MB). قلّل المرفقات أو ابدأ محادثة جديدة.", 413);
     }
-    const body = JSON.parse(rawBody) as { messages?: unknown; documents?: unknown; skipWebSearch?: unknown };
+    const body = JSON.parse(rawBody) as { messages?: unknown; documents?: unknown; images?: unknown; skipWebSearch?: unknown };
     skipWebSearch = body.skipWebSearch === true;
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
       return jsonError("أرسل رسالة واحدة على الأقل.", 400);
@@ -138,6 +139,20 @@ export async function POST(request: NextRequest) {
       return [{ name: doc.name.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200), content: doc.content.slice(0, 200000) }];
     }) : [];
     docContext = docs.length ? docs.map((d,i) => `[ملف مرفق ${i+1}: ${d.name}]\n${d.content}`).join("\n\n").slice(0, 200_000) : "";
+    const rawImages = Array.isArray(body.images) ? body.images.slice(0, 4) : [];
+    let totalImageChars = 0;
+    visionImages = rawImages.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const image = item as { name?: unknown; mimeType?: unknown; dataUrl?: unknown };
+      if (typeof image.name !== "string" || typeof image.mimeType !== "string" || typeof image.dataUrl !== "string") return [];
+      const mimeType = image.mimeType.toLowerCase();
+      const match = image.dataUrl.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/);
+      if (!match || match[1] !== mimeType || image.dataUrl.length > 2_100_000) return [];
+      totalImageChars += image.dataUrl.length;
+      if (totalImageChars > 4_800_000) return [];
+      return [{ name: image.name.replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200), mimeType, dataUrl: image.dataUrl }];
+    });
+    if (rawImages.length && visionImages.length !== rawImages.length) return jsonError("تعذر التحقق من صيغة أو حجم إحدى الصور المرفقة. جرّب صورة JPG أو PNG أصغر.", 413);
   } catch {
     return jsonError("تعذر قراءة الطلب.", 400);
   }
@@ -145,10 +160,12 @@ export async function POST(request: NextRequest) {
   // Phase 1: understand intent and plan research using the conversation context.
   const latestIndex = messages.map((m) => m.role).lastIndexOf("user");
   const latestUser = latestIndex >= 0 ? messages[latestIndex].content : "";
-  const modelConfig = getModelConfig();
+  const visionConfig = visionImages.length ? getVisionModelConfig() : null;
+  if (visionImages.length && !visionConfig) return jsonError("تحليل الصور المباشر يحتاج إعداد GEMINI_API_KEY في إعدادات الاستضافة. لم نرسل الصورة إلى نموذج نصي غير داعم للرؤية.", 503);
+  const modelConfig = visionConfig || getModelConfig();
   // When a file is attached, the user's intent is normally to inspect that file.
   // Do not let the planner turn a document/image question into an unrelated web search.
-  const hasAttachedDocuments = docs.length > 0;
+  const hasAttachedDocuments = docs.length > 0 || visionImages.length > 0;
   const requestPlan = (skipWebSearch || hasAttachedDocuments)
     ? { ...fallbackPlan(latestUser), needsSearch:false, searchQueries:[], reason:hasAttachedDocuments ? "attached_document_analysis" : "search_already_performed" }
     : await planUserRequest(modelConfig,latestUser,messages.slice(0,latestIndex),request.signal);
@@ -207,6 +224,20 @@ export async function POST(request: NextRequest) {
     }
   }
   groundedMessages = [systemMessage, ...groundedMessages];
+  const providerMessages: Array<ChatMessage | { role: "user"; content: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> }> = groundedMessages;
+  if (visionImages.length) {
+    const lastUserIndex = providerMessages.map(message => message.role).lastIndexOf("user");
+    if (lastUserIndex >= 0) {
+      const textContent = providerMessages[lastUserIndex].content;
+      providerMessages[lastUserIndex] = {
+        role: "user",
+        content: [
+          { type: "text", text: textContent + "\n\nحلّل الصور المرفقة بصريًا مباشرة، واستخرج النصوص والجداول والعناصر المرئية. فرّق بين ما تراه بوضوح وما هو غير مقروء، ولا تفترض صحة مستند أو توقيع أو ختم قانوني." },
+          ...visionImages.map(image => ({ type: "image_url" as const, image_url: { url: image.dataUrl } })),
+        ],
+      };
+    }
+  }
   if (docContext) {
     groundedMessages.splice(1, 0, {
       role: "system",
@@ -214,35 +245,18 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Preferred: Cloudflare Workers AI OpenAI-compatible Chat Completions API.
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const cloudflareToken = process.env.CLOUDFLARE_API_TOKEN;
-  const cloudflareModel = process.env.CLOUDFLARE_MODEL || "@cf/meta/llama-3.1-8b-instruct";
-  const openAiBase = process.env.OPENAI_BASE_URL;
-  const openAiKey = process.env.OPENAI_API_KEY;
-  const openAiModel = process.env.OPENAI_MODEL;
-
-  let endpoint = "";
-  let token = "";
-  let model = "";
-  if (accountId && cloudflareToken) {
-    endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/chat/completions`;
-    token = cloudflareToken;
-    model = cloudflareModel;
-  } else if (openAiBase && openAiKey && openAiModel) {
-    endpoint = `${openAiBase.replace(/\/+$/, "")}/chat/completions`;
-    token = openAiKey;
-    model = openAiModel;
-  } else {
-    return jsonError("خدمة الذكاء الاصطناعي غير مهيأة. أضف أسرار Cloudflare أو مزوّدًا متوافقًا مع OpenAI إلى إعدادات الاستضافة.", 503);
-  }
-
+  // Route image requests to the explicitly configured multimodal Gemini model.
+  const activeModelConfig = visionImages.length ? visionConfig : getModelConfig();
+  if (!activeModelConfig) return jsonError("خدمة الذكاء الاصطناعي غير مهيأة. أضف أسرار مزوّد الذكاء الاصطناعي إلى إعدادات الاستضافة.", 503);
+  const endpoint = activeModelConfig.endpoint;
+  const token = activeModelConfig.token;
+  const model = activeModelConfig.model;
   let upstream: Response;
   try {
     upstream = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ model, messages: groundedMessages, stream: true, temperature: 0.6 }),
+      body: JSON.stringify({ model, messages: providerMessages, stream: true, temperature: 0.6 }),
       signal: request.signal,
       cache: "no-store",
     });
