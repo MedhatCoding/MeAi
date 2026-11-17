@@ -7,10 +7,15 @@ export const maxDuration = 60;
 
 const BUCKET = "meai-files";
 const MAX_EXTRACT_BYTES = 15 * 1024 * 1024;
-const MAX_TEXT_CHARS = 200_000;\nconst OCR_MAX_PAGES = 12;\n\nasync function recognizeImage(image: Buffer) {\n  const { createWorker } = await import("tesseract.js");\n  const worker = await createWorker("ara+eng", 1, {\n    langPath: "https://tessdata.projectnaptha.com/4.0.0",\n    gzip: true,\n    logger: () => undefined,\n  });\n  try {\n    const result = await worker.recognize(image);\n    return normalizeText(result.data.text || "");\n  } finally {\n    await worker.terminate();\n  }\n}\n
+const MAX_TEXT_CHARS = 200_000;
+const OCR_MAX_PAGES = 12;
 
 function fail(message: string, status: number) {
   return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+function normalizeText(value: string) {
+  return value.replace(/\u0000/g, "").replace(/\r\n?/g, "\n").trim().slice(0, MAX_TEXT_CHARS);
 }
 
 async function authenticate(request: NextRequest) {
@@ -19,8 +24,8 @@ async function authenticate(request: NextRequest) {
   const match = (request.headers.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
   if (!base || !anonKey || !match) return null;
   try {
-    const response = await fetch(`${base}/auth/v1/user`, {
-      headers: { apikey: anonKey, Authorization: `Bearer ${match[1]}` },
+    const response = await fetch(base + "/auth/v1/user", {
+      headers: { apikey: anonKey, Authorization: "Bearer " + match[1] },
       cache: "no-store",
       signal: AbortSignal.timeout(7000),
     });
@@ -30,8 +35,13 @@ async function authenticate(request: NextRequest) {
   } catch { return null; }
 }
 
-function normalizeText(value: string) {
-  return value.replace(/\u0000/g, "").replace(/\r\n?/g, "\n").trim().slice(0, MAX_TEXT_CHARS);
+async function createOcrWorker() {
+  const { createWorker } = await import("tesseract.js");
+  return createWorker("ara+eng", 1, {
+    langPath: "https://tessdata.projectnaptha.com/4.0.0",
+    gzip: true,
+    logger: () => undefined,
+  });
 }
 
 async function extractPdf(buffer: Buffer) {
@@ -44,23 +54,59 @@ async function extractPdf(buffer: Buffer) {
     const page = await pdf.getPage(pageNo);
     const text = await page.getTextContent();
     const line = text.items.map((item) => "str" in item ? item.str : "").filter(Boolean).join(" ");
-    if (line.trim()) pages.push(`[صفحة ${pageNo}]\n${line}`);
+    if (line.trim()) pages.push("[صفحة " + pageNo + "]\n" + line);
     if (pages.join("\n\n").length >= MAX_TEXT_CHARS) break;
   }
+
+  let extractedText = normalizeText(pages.join("\n\n"));
+  let ocrUsed = false;
+  if (extractedText.length < 40) {
+    const [{ createCanvas }, worker] = await Promise.all([import("@napi-rs/canvas"), createOcrWorker()]);
+    try {
+      const ocrPages: string[] = [];
+      const ocrLimit = Math.min(pdf.numPages, OCR_MAX_PAGES);
+      for (let pageNo = 1; pageNo <= ocrLimit; pageNo++) {
+        const page = await pdf.getPage(pageNo);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+        const context = canvas.getContext("2d");
+        await page.render({
+          canvas: canvas as unknown as HTMLCanvasElement,
+          canvasContext: context as unknown as CanvasRenderingContext2D,
+          viewport,
+        }).promise;
+        const result = await worker.recognize(canvas.toBuffer("image/png"));
+        if (result.data.text.trim()) ocrPages.push("[صفحة " + pageNo + " - OCR]\n" + result.data.text);
+        if (ocrPages.join("\n").length >= MAX_TEXT_CHARS) break;
+      }
+      extractedText = normalizeText(ocrPages.join("\n\n"));
+      ocrUsed = true;
+    } finally {
+      await worker.terminate();
+    }
+  }
   await pdf.destroy();
-  return { text: normalizeText(pages.join("\n\n")), pages: pdf.numPages, truncated: pdf.numPages > pageLimit };
+  return { text: extractedText, pages: pdf.numPages, truncated: pdf.numPages > pageLimit || (ocrUsed && pdf.numPages > OCR_MAX_PAGES), ocrUsed };
 }
 
 async function extractDocument(buffer: Buffer, name: string, mimeType: string) {
   const extension = name.split(".").pop()?.toLowerCase() || "";
   if (extension === "pdf" || mimeType === "application/pdf") {
-    const result = await extractPdf(buffer);
-    return { ...result, format: "pdf" };
+    return { ...(await extractPdf(buffer)), format: "pdf" };
+  }
+  if (["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"].includes(extension) || mimeType.startsWith("image/")) {
+    const worker = await createOcrWorker();
+    try {
+      const result = await worker.recognize(buffer);
+      return { text: normalizeText(result.data.text || ""), format: extension || "image", pages: 1, truncated: false, ocrUsed: true };
+    } finally {
+      await worker.terminate();
+    }
   }
   if (extension === "docx" || mimeType.includes("wordprocessingml")) {
     const mammoth = await import("mammoth");
     const result = await mammoth.extractRawText({ buffer });
-    return { text: normalizeText(result.value), format: "docx", pages: null, truncated: result.value.length > MAX_TEXT_CHARS };
+    return { text: normalizeText(result.value), format: "docx", pages: null, truncated: result.value.length > MAX_TEXT_CHARS, ocrUsed: false };
   }
   if (["xlsx", "xls"].includes(extension) || mimeType.includes("spreadsheet") || mimeType.includes("ms-excel")) {
     const XLSX = await import("xlsx");
@@ -69,13 +115,14 @@ async function extractDocument(buffer: Buffer, name: string, mimeType: string) {
     const sections = sheets.map((sheetName) => {
       const sheet = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "" }).slice(0, 5000);
-      return `[ورقة: ${sheetName}]\n` + rows.map((row) => (row as unknown[]).map((cell) => String(cell ?? "")).join("\t")).join("\n");
+      return "[ورقة: " + sheetName + "]\n" + rows.map((row) => (row as unknown[]).map((cell) => String(cell ?? "")).join("\t")).join("\n");
     });
     const text = sections.join("\n\n");
-    return { text: normalizeText(text), format: extension, pages: sheets.length, truncated: workbook.SheetNames.length > 20 || text.length > MAX_TEXT_CHARS };
+    return { text: normalizeText(text), format: extension, pages: sheets.length, truncated: workbook.SheetNames.length > 20 || text.length > MAX_TEXT_CHARS, ocrUsed: false };
   }
   if (["txt", "md", "csv", "tsv", "json", "yaml", "yml", "toml", "html", "xml", "js", "jsx", "ts", "tsx", "py", "css", "sql", "log", "sh", "env"].includes(extension) || mimeType.startsWith("text/")) {
-    return { text: normalizeText(new TextDecoder("utf-8", { fatal: false }).decode(buffer)), format: extension || "text", pages: null, truncated: buffer.length > MAX_TEXT_CHARS };
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+    return { text: normalizeText(text), format: extension || "text", pages: null, truncated: text.length > MAX_TEXT_CHARS, ocrUsed: false };
   }
   throw new Error("نوع الملف غير مدعوم. المدعوم: PDF وDOCX وXLSX وXLS وCSV والملفات النصية والصور PNG وJPG وWEBP وTIFF.");
 }
@@ -94,14 +141,14 @@ export async function POST(request: NextRequest) {
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 255) : "";
   const mimeType = typeof body.mimeType === "string" ? body.mimeType.slice(0, 160) : "application/octet-stream";
   const size = Number(body.size);
-  if (!name || !path.startsWith(`${session.userId}/`) || path.includes("..") || path.startsWith("/") || !Number.isSafeInteger(size) || size <= 0 || size > MAX_EXTRACT_BYTES) {
-    return fail(`الملف غير صالح للاستخراج. الحد الأقصى المدعوم حاليًا ${MAX_EXTRACT_BYTES / 1024 / 1024}MB.`, 400);
+  if (!name || !path.startsWith(session.userId + "/") || path.includes("..") || path.startsWith("/") || !Number.isSafeInteger(size) || size <= 0 || size > MAX_EXTRACT_BYTES) {
+    return fail("الملف غير صالح للاستخراج. الحد الأقصى المدعوم حاليًا 15MB.", 400);
   }
 
   try {
     const objectPath = path.split("/").map(encodeURIComponent).join("/");
-    const downloaded = await fetch(`${session.base}/storage/v1/object/authenticated/${BUCKET}/${objectPath}`, {
-      headers: { apikey: session.anonKey, Authorization: `Bearer ${session.token}` },
+    const downloaded = await fetch(session.base + "/storage/v1/object/authenticated/" + BUCKET + "/" + objectPath, {
+      headers: { apikey: session.anonKey, Authorization: "Bearer " + session.token },
       cache: "no-store",
       signal: AbortSignal.timeout(25000),
     });
@@ -118,7 +165,8 @@ export async function POST(request: NextRequest) {
       characters: extracted.text.length,
       pages: extracted.pages,
       truncated: extracted.truncated,
-      extraction: extracted.ocrUsed ? "ocr" : "server",\n      ocrUsed: Boolean(extracted.ocrUsed),
+      extraction: extracted.ocrUsed ? "ocr" : "server",
+      ocrUsed: extracted.ocrUsed,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "تعذر استخراج محتوى الملف.";
