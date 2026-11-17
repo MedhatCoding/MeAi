@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
   const modelConfig = getModelConfig();
   const configuredModelProviders = getConfiguredModelProviders();
   const visionConfig = getVisionModelConfig();
-  const cloudflareVisionConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
   const imageUnderstandingConfigured = Boolean(visionConfig);
   const provider = modelConfig?.provider === "cloudflare" ? "Cloudflare Workers AI" : modelConfig?.provider === "gemini" ? "Google Gemini API" : modelConfig?.provider === "groq" ? "Groq API" : modelConfig?.provider === "openai-compatible" ? "OpenAI-compatible API" : null;
   const githubConfigured = Boolean(process.env.GITHUB_TOKEN);
@@ -33,7 +32,7 @@ export async function GET(request: NextRequest) {
     provider,
     model: modelConfig?.model || null,
     modelRouting: { selectedProvider: modelConfig?.provider || null, configuredProviders: configuredModelProviders, preference: process.env.MEAI_MODEL_PROVIDER || "cloudflare" },
-    visionRouting: { selectedProvider: visionConfig?.provider || null, model: visionConfig?.model || null, configured: imageUnderstandingConfigured, fallbackProvider: visionConfig?.provider === "gemini" && cloudflareVisionConfigured ? "cloudflare" : null },
+    visionRouting: { selectedProvider: visionConfig?.provider || null, model: visionConfig?.model || null, configured: imageUnderstandingConfigured },
     features: {
       chat: Boolean(provider),
       agentPlanning: Boolean(provider),
