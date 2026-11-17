@@ -57,6 +57,17 @@ export function getConfiguredModelProviders(): string[] {
 
 // Vision is routed explicitly to Gemini because the default Cloudflare text model is not multimodal.
 export function getVisionModelConfig(): ModelConfig | null {
+  const cloudflareId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const cloudflareToken = process.env.CLOUDFLARE_API_TOKEN;
+  if (cloudflareId && cloudflareToken) {
+    const model = process.env.CLOUDFLARE_VISION_MODEL || "@cf/meta/llama-3.2-11b-vision-instruct";
+    return {
+      provider: "cloudflare",
+      endpoint: `https://api.cloudflare.com/client/v4/accounts/${cloudflareId}/ai/run/${model}`,
+      token: cloudflareToken,
+      model,
+    };
+  }
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
   return {
