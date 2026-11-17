@@ -296,6 +296,12 @@ export default function Home() {
     try {
       const data = await requestAgentExecution(task);
       setAgentResult(data.answer || "");
+      if (data.artifact && typeof data.artifact.filename === "string" && typeof data.artifact.content === "string") {
+        const savedArtifact = { filename: data.artifact.filename, content: data.artifact.content, summary: typeof data.artifact.summary === "string" ? data.artifact.summary : "ملف أنشأه الوكيل", createdAt: new Date().toISOString() };
+        const nextArtifacts = [savedArtifact, ...artifacts].slice(0, 50);
+        setArtifacts(nextArtifacts);
+        try { localStorage.setItem("medhat-artifacts-v1", JSON.stringify(nextArtifacts)); } catch {}
+      }
       setAgentSources(Array.isArray(data.searchSources) ? data.searchSources.filter((item: unknown) => item && typeof item === "object" && typeof (item as {title?:unknown}).title === "string" && typeof (item as {url?:unknown}).url === "string") : []);
       setAgentTools(Array.isArray(data.toolsUsed) ? data.toolsUsed.filter((item: unknown) => typeof item === "string") : []);
       setAgentTrace(Array.isArray(data.toolTrace) ? data.toolTrace.filter((item: unknown) => item && typeof item === "object" && typeof (item as {tool?:unknown}).tool === "string" && typeof (item as {detail?:unknown}).detail === "string") : []);
