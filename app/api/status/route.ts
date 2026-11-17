@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { rejectCrossOrigin } from "../_lib/guard";
 import { apiAuthRequired } from "../_lib/api-access";
-import { getModelConfig, getConfiguredModelProviders } from "../_lib/model-config";
+import { getModelConfig, getVisionModelConfig, getConfiguredModelProviders } from "../_lib/model-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +12,9 @@ export async function GET(request: NextRequest) {
 
   const modelConfig = getModelConfig();
   const configuredModelProviders = getConfiguredModelProviders();
+  const visionConfig = getVisionModelConfig();
   const cloudflareVisionConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
-  const imageUnderstandingConfigured = cloudflareVisionConfigured || Boolean(process.env.GEMINI_API_KEY);
+  const imageUnderstandingConfigured = Boolean(visionConfig);
   const provider = modelConfig?.provider === "cloudflare" ? "Cloudflare Workers AI" : modelConfig?.provider === "gemini" ? "Google Gemini API" : modelConfig?.provider === "groq" ? "Groq API" : modelConfig?.provider === "openai-compatible" ? "OpenAI-compatible API" : null;
   const githubConfigured = Boolean(process.env.GITHUB_TOKEN);
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
     provider,
     model: modelConfig?.model || null,
     modelRouting: { selectedProvider: modelConfig?.provider || null, configuredProviders: configuredModelProviders, preference: process.env.MEAI_MODEL_PROVIDER || "cloudflare" },
+    visionRouting: { selectedProvider: visionConfig?.provider || null, model: visionConfig?.model || null, configured: imageUnderstandingConfigured, fallbackProvider: visionConfig?.provider === "gemini" && cloudflareVisionConfigured ? "cloudflare" : null },
     features: {
       chat: Boolean(provider),
       agentPlanning: Boolean(provider),
@@ -54,7 +56,7 @@ export async function GET(request: NextRequest) {
     },
     readiness: {
       chat: provider ? "configured_not_live_tested" : "missing_provider",
-      imageUnderstanding: cloudflareVisionConfigured ? "cloudflare_llama_vision_configured_meta_license_may_be_required_not_live_tested" : process.env.GEMINI_API_KEY ? "gemini_multimodal_configured_not_live_tested" : "missing_vision_provider",
+      imageUnderstanding: visionConfig?.provider === "gemini" ? "gemini_vision_selected_configured_not_live_tested" : visionConfig?.provider === "cloudflare" ? "cloudflare_vision_selected_meta_license_may_be_required_not_live_tested" : "missing_vision_provider",
       webSearch: searchProviders.length > 0 ? "configured_not_live_tested" : "missing_search_provider_key",
       webSearchProviders: searchProviders,
       codeExecution: process.env.E2B_API_KEY ? "e2b_python_sandbox_configured_not_live_tested" : "missing_e2b_api_key",
