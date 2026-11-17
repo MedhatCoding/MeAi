@@ -261,7 +261,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(visionImages.length && activeModelConfig.provider === "cloudflare"
         ? {
             messages: groundedMessages.map((message, index) => index === groundedMessages.map(item => item.role).lastIndexOf("user")
-              ? { ...message, content: message.content + "\\n\\nحلّل الصورة المرفقة بصريًا، واستخرج النصوص والجداول والعناصر المرئية، واذكر بوضوح ما لا يمكن قراءته أو الجزم به." }
+              ? { ...message, content: message.content + "\n\nحلّل الصورة المرفقة بصريًا، واستخرج النصوص والجداول والعناصر المرئية، واذكر بوضوح ما لا يمكن قراءته أو الجزم به." }
               : message),
             image: visionImages[0].dataUrl,
             stream: true,
