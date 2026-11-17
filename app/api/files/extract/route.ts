@@ -84,8 +84,12 @@ async function extractPdf(buffer: Buffer) {
     // cold-start and missing-binary failures seen in serverless deployments.
     if (visionConfig?.provider === "gemini") {
       const recognized = await Promise.all(renderedPages.map(async ({ pageNo, image }) => {
-        const text = await extractImageWithGemini(image, "image/png");
-        return text?.trim() ? "[صفحة " + pageNo + " - Gemini OCR]\n" + text : "";
+        try {
+          const text = await extractImageWithGemini(image, "image/png");
+          return text?.trim() ? "[صفحة " + pageNo + " - Gemini OCR]\n" + text : "";
+        } catch {
+          return "";
+        }
       }));
       extractedText = normalizeText(recognized.filter(Boolean).join("\n\n"));
       ocrUsed = Boolean(extractedText);
