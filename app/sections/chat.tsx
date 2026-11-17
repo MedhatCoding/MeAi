@@ -8,8 +8,8 @@ import type { ChatMode, Message } from "../lib/shared";
 const suggestions = [
   { icon: Code2, title: "ساعدني في البرمجة", mode: "chat" as ChatMode, prompt: "ساعدني في مراجعة كود وتحسينه مع شرح التغييرات." },
   { icon: Search, title: "ابحث على الويب", mode: "research" as ChatMode, prompt: "أحدث تطورات الذكاء الاصطناعي مفتوحة المصدر هذا الشهر" },
-  { icon: ImageIcon, title: "ارسم لي صورة", mode: "image" as ChatMode, prompt: "غروب الشمس فوق الكورنيش بأسلوب سينمائي دافئ" },
-  { icon: Bot, title: "نفّذ مهمة كاملة", mode: "agent" as ChatMode, prompt: "ابحث عن أفضل أدوات إدارة المهام مفتوحة المصدر وقارن بينها مع مصادر موثوقة." },
+  { icon: ImageIcon, title: "ارسم لي صورة", mode: "image" as ChatMode, prompt: "ارسم لي صورة: غروب الشمس فوق الكورنيش بأسلوب سينمائي دافئ" },
+  { icon: Bot, title: "نفّذ مهمة كاملة", mode: "agent" as ChatMode, prompt: "نفّذ مهمة كاملة: ابحث عن أفضل أدوات إدارة المهام مفتوحة المصدر وقارن بينها مع مصادر موثوقة." },
 ];
 
 interface ChatSectionProps {
