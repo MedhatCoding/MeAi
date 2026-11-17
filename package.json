@@ -17,7 +17,9 @@
     "tus-js-client": "^4.3.1",
     "mammoth": "^1.9.1",
     "pdfjs-dist": "^4.10.38",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "tesseract.js": "^6.0.1",
+    "@napi-rs/canvas": "^0.1.68"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
