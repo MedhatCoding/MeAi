@@ -558,8 +558,9 @@ ${data.error.name}: ${data.error.value}` : ""));
 
   async function makeVisionImageDataUrl(file: File): Promise<string> {
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-    if (!file.type.startsWith("image/")) return "";
-    let prepared = file;
+    const detectedType = file.type || inferMimeType(file.name);
+    if (!detectedType.startsWith("image/")) return "";
+    let prepared = file.type ? file : new File([file], file.name, { type: detectedType });
     if (file.size > 1500000) {
       try {
         const bitmap = await createImageBitmap(file);
