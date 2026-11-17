@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
 
   const modelConfig = getModelConfig();
   const configuredModelProviders = getConfiguredModelProviders();
+  const cloudflareVisionConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
+  const imageUnderstandingConfigured = cloudflareVisionConfigured || Boolean(process.env.GEMINI_API_KEY);
   const provider = modelConfig?.provider === "cloudflare" ? "Cloudflare Workers AI" : modelConfig?.provider === "gemini" ? "Google Gemini API" : modelConfig?.provider === "groq" ? "Groq API" : modelConfig?.provider === "openai-compatible" ? "OpenAI-compatible API" : null;
   const githubConfigured = Boolean(process.env.GITHUB_TOKEN);
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest) {
       // The general-purpose agent can perform model-backed work and bounded read-only integrations; it is not a shell/code sandbox.
       agentExecution: Boolean(provider),
       agentSandbox: Boolean(process.env.E2B_API_KEY),
-      imageUnderstanding: Boolean(process.env.GEMINI_API_KEY),
+      imageUnderstanding: imageUnderstandingConfigured,
       imageGeneration: false,
       videoGeneration: false,
       webSearch: searchProviders.length > 0,
@@ -52,7 +54,7 @@ export async function GET(request: NextRequest) {
     },
     readiness: {
       chat: provider ? "configured_not_live_tested" : "missing_provider",
-      imageUnderstanding: process.env.GEMINI_API_KEY ? "gemini_multimodal_configured_not_live_tested" : "missing_gemini_api_key",
+      imageUnderstanding: cloudflareVisionConfigured ? "cloudflare_llama_vision_configured_meta_license_may_be_required_not_live_tested" : process.env.GEMINI_API_KEY ? "gemini_multimodal_configured_not_live_tested" : "missing_vision_provider",
       webSearch: searchProviders.length > 0 ? "configured_not_live_tested" : "missing_search_provider_key",
       webSearchProviders: searchProviders,
       codeExecution: process.env.E2B_API_KEY ? "e2b_python_sandbox_configured_not_live_tested" : "missing_e2b_api_key",
