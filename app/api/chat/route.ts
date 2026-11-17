@@ -285,21 +285,21 @@ export async function POST(request: NextRequest) {
     responseBody = upstream.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, controller) {
         pending += decoder.decode(chunk, { stream: true });
-        const frames = pending.split("\\n\\n");
+        const frames = pending.split("\n\n");
         pending = frames.pop() || "";
         for (const frame of frames) {
-          const data = frame.split("\\n").find(line => line.startsWith("data:"))?.slice(5).trim();
+          const data = frame.split("\n").find(line => line.startsWith("data:"))?.slice(5).trim();
           if (!data) continue;
           if (data === "[DONE]") {
-            controller.enqueue(encoder.encode("data: [DONE]\\n\\n"));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             continue;
           }
           try {
             const parsed = JSON.parse(data) as { response?: unknown; error?: unknown };
             if (typeof parsed.response === "string") {
-              controller.enqueue(encoder.encode("data: " + JSON.stringify({ choices: [{ delta: { content: parsed.response } }] }) + "\\n\\n"));
+              controller.enqueue(encoder.encode("data: " + JSON.stringify({ choices: [{ delta: { content: parsed.response } }] }) + "\n\n"));
             } else if (parsed.error) {
-              controller.enqueue(encoder.encode("data: " + JSON.stringify({ error: { message: String(parsed.error) } }) + "\\n\\n"));
+              controller.enqueue(encoder.encode("data: " + JSON.stringify({ error: { message: String(parsed.error) } }) + "\n\n"));
             }
           } catch {
             // Ignore malformed provider frames; never forward raw provider payloads to the UI.
@@ -308,14 +308,14 @@ export async function POST(request: NextRequest) {
       },
       flush(controller) {
         pending += decoder.decode();
-        const data = pending.split("\\n").find(line => line.startsWith("data:"))?.slice(5).trim();
+        const data = pending.split("\n").find(line => line.startsWith("data:"))?.slice(5).trim();
         if (data && data !== "[DONE]") {
           try {
             const parsed = JSON.parse(data) as { response?: unknown };
-            if (typeof parsed.response === "string") controller.enqueue(encoder.encode("data: " + JSON.stringify({ choices: [{ delta: { content: parsed.response } }] }) + "\\n\\n"));
+            if (typeof parsed.response === "string") controller.enqueue(encoder.encode("data: " + JSON.stringify({ choices: [{ delta: { content: parsed.response } }] }) + "\n\n"));
           } catch {}
         }
-        controller.enqueue(encoder.encode("data: [DONE]\\n\\n"));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       },
     }));
   }
@@ -325,7 +325,7 @@ export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = responseBody.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
     start(controller) {
-      if (metadata) controller.enqueue(encoder.encode("event: search_results\\ndata: " + JSON.stringify(metadata) + "\\n\\n"));
+      if (metadata) controller.enqueue(encoder.encode("event: search_results\ndata: " + JSON.stringify(metadata) + "\n\n"));
     },
   }));
   return new Response(stream, {
