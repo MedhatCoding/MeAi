@@ -64,27 +64,48 @@ async function extractPdf(buffer: Buffer) {
   let extractedText = normalizeText(pages.join("\n\n"));
   let ocrUsed = false;
   if (extractedText.length < 40) {
-    const [{ createCanvas }, worker] = await Promise.all([import("@napi-rs/canvas"), createOcrWorker()]);
-    try {
-      const ocrPages: string[] = [];
-      const ocrLimit = Math.min(pdf.numPages, OCR_MAX_PAGES);
-      for (let pageNo = 1; pageNo <= ocrLimit; pageNo++) {
-        const page = await pdf.getPage(pageNo);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-        const context = canvas.getContext("2d");
-        await page.render({
-          canvasContext: context as unknown as CanvasRenderingContext2D,
-          viewport,
-        }).promise;
-        const result = await worker.recognize(canvas.toBuffer("image/png"));
-        if (result.data.text.trim()) ocrPages.push("[صفحة " + pageNo + " - OCR]\n" + result.data.text);
-        if (ocrPages.join("\n").length >= MAX_TEXT_CHARS) break;
+    const ocrLimit = Math.min(pdf.numPages, OCR_MAX_PAGES);
+    const visionConfig = getVisionModelConfig();
+    const [{ createCanvas }] = await Promise.all([import("@napi-rs/canvas")]);
+    const renderedPages: { pageNo: number; image: Buffer }[] = [];
+    for (let pageNo = 1; pageNo <= ocrLimit; pageNo++) {
+      const page = await pdf.getPage(pageNo);
+      const viewport = page.getViewport({ scale: 1.35 });
+      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+      const context = canvas.getContext("2d");
+      await page.render({
+        canvasContext: context as unknown as CanvasRenderingContext2D,
+        viewport,
+      }).promise;
+      renderedPages.push({ pageNo, image: canvas.toBuffer("image/png") });
+    }
+
+    // Gemini Vision is preferred for scanned PDFs: it avoids the large WASM
+    // cold-start and missing-binary failures seen in serverless deployments.
+    if (visionConfig?.provider === "gemini") {
+      const recognized = await Promise.all(renderedPages.map(async ({ pageNo, image }) => {
+        const text = await extractImageWithGemini(image, "image/png");
+        return text?.trim() ? "[صفحة " + pageNo + " - Gemini OCR]\n" + text : "";
+      }));
+      extractedText = normalizeText(recognized.filter(Boolean).join("\n\n"));
+      ocrUsed = Boolean(extractedText);
+    }
+
+    // Keep the local OCR fallback for deployments without a configured Vision API.
+    if (extractedText.length < 40) {
+      const worker = await createOcrWorker();
+      try {
+        const ocrPages: string[] = [];
+        for (const { pageNo, image } of renderedPages) {
+          const result = await worker.recognize(image);
+          if (result.data.text.trim()) ocrPages.push("[صفحة " + pageNo + " - OCR]\n" + result.data.text);
+          if (ocrPages.join("\n").length >= MAX_TEXT_CHARS) break;
+        }
+        extractedText = normalizeText(ocrPages.join("\n\n"));
+        ocrUsed = true;
+      } finally {
+        await worker.terminate();
       }
-      extractedText = normalizeText(ocrPages.join("\n\n"));
-      ocrUsed = true;
-    } finally {
-      await worker.terminate();
     }
   }
   await pdf.destroy();
