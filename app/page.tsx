@@ -100,6 +100,9 @@ export default function Home() {
 
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const conversationsRef = useRef(conversations);
+  const cloudConversationsReady = useRef(false);
+  const cloudConversationSnapshots = useRef<Map<string, string>>(new Map());
   const active = useMemo(() => nav.find(n => n.id === section)!, [section]);
 
   useEffect(() => {
@@ -136,6 +139,85 @@ export default function Home() {
       setCloudMemoryStatus(error instanceof Error ? error.message : "تعذر تحميل ملفات السحابة.");
     }
   }
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+  useEffect(() => {
+    if (!accountToken) {
+      cloudConversationsReady.current = false;
+      cloudConversationSnapshots.current.clear();
+      return;
+    }
+    let cancelled = false;
+    cloudConversationsReady.current = false;
+    cloudConversationSnapshots.current.clear();
+    (async () => {
+      setCloudMemoryStatus("جارٍ تحميل محادثات حسابك السحابي…");
+      try {
+        const response = await fetch("/api/account/conversations", {
+          headers: { Authorization: `Bearer ${accountToken}` },
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "تعذر تحميل المحادثات السحابية.");
+        if (cancelled) return;
+        const remote = (Array.isArray(data.conversations) ? data.conversations : []) as {id:string;title:string;updatedAt:string;messages:Message[]}[];
+        const snapshots = new Map<string, string>();
+        for (const item of remote) snapshots.set(item.id, JSON.stringify(item));
+        cloudConversationSnapshots.current = snapshots;
+        const local = conversationsRef.current;
+        const merged = new Map<string, {id:string;title:string;updatedAt:string;messages:Message[]}>();
+        for (const item of remote) merged.set(item.id, item);
+        for (const item of local) {
+          const cloud = merged.get(item.id);
+          const localTime = Date.parse(item.updatedAt) || 0;
+          const cloudTime = cloud ? (Date.parse(cloud.updatedAt) || 0) : -1;
+          if (!cloud || localTime >= cloudTime) merged.set(item.id, item);
+        }
+        const combined = [...merged.values()].sort((a,b) => (Date.parse(b.updatedAt)||0) - (Date.parse(a.updatedAt)||0)).slice(0,60);
+        setConversations(combined);
+        persistConversations(combined);
+        const selectedId = activeId || localStorage.getItem("medhat-active-chat-v1") || "";
+        const selected = combined.find(item => item.id === selectedId) || combined[0];
+        if (selected) {
+          setActiveId(selected.id);
+          setMessages(selected.messages);
+          localStorage.setItem("medhat-active-chat-v1", selected.id);
+        }
+        cloudConversationsReady.current = true;
+        setCloudMemoryStatus(remote.length ? "تم تحميل محادثات حسابك ودمجها مع سجل هذا الجهاز." : (local.length ? "لم توجد محادثات سحابية سابقة؛ جارٍ حفظ سجل هذا الجهاز في حسابك." : "الحساب جاهز لحفظ المحادثات الجديدة تلقائيًا."));
+      } catch (error) {
+        if (!cancelled) setCloudMemoryStatus(error instanceof Error ? error.message : "تعذر تحميل المحادثات السحابية.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [accountToken]);
+  useEffect(() => {
+    if (!accountToken || !cloudConversationsReady.current || !conversations.length) return;
+    const changed = conversations.filter(item => cloudConversationSnapshots.current.get(item.id) !== JSON.stringify(item));
+    if (!changed.length) return;
+    const timer = window.setTimeout(() => {
+      void Promise.all(changed.map(async item => {
+        try {
+          const response = await fetch("/api/account/conversations", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accountToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ conversation: item }),
+            cache: "no-store",
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "تعذر حفظ إحدى المحادثات.");
+          cloudConversationSnapshots.current.set(item.id, JSON.stringify(item));
+          return null;
+        } catch (error) {
+          return error instanceof Error ? error.message : "تعذر حفظ إحدى المحادثات.";
+        }
+      })).then(errors => {
+        const failed = errors.filter(Boolean);
+        if (failed.length) setCloudMemoryStatus(failed[0] || "تعذر حفظ بعض المحادثات السحابية.");
+        else setCloudMemoryStatus("تم حفظ المحادثات والرسائل تلقائيًا في حسابك السحابي.");
+      });
+    }, 1400);
+    return () => window.clearTimeout(timer);
+  }, [conversations, accountToken]);
   useEffect(() => { if (accountToken) void refreshCloudFiles(accountToken); }, [accountToken]);
   useEffect(() => { fetch("/api/status", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(data => { if (data) setServiceStatus(data); }).catch(() => setServiceStatus(null)); void refreshConnectors(); void refreshGoogleStatus(); }, []);
   async function refreshConnectors() { setConnectorsChecked(false); try { const response = await fetch("/api/integrations", { cache: "no-store" }); const data = await response.json(); setConnectors(Array.isArray(data.connectors) ? data.connectors : []); } catch { setConnectors([]); } finally { setConnectorsChecked(true); } }
@@ -571,6 +653,20 @@ ${data.error.name}: ${data.error.value}` : ""));
     e.stopPropagation();
     const next = conversations.filter(c => c.id !== id);
     setConversations(next); persistConversations(next);
+    cloudConversationSnapshots.current.delete(id);
+    if (accountToken) {
+      void fetch("/api/account/conversations", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accountToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+        cache: "no-store",
+      }).then(async response => {
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          setCloudMemoryStatus(data.error || "تعذر حذف المحادثة من السحابة؛ ستظل محفوظة هناك.");
+        }
+      }).catch(() => setCloudMemoryStatus("تعذر الاتصال لحذف المحادثة من السحابة."));
+    }
     if (activeId === id) {
       const fallback = next[0];
       if (fallback) {
