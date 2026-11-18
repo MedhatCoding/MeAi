@@ -9,7 +9,7 @@ interface CloudFile { id:string; name:string; mime_type:string|null; storage_pat
 function isImageFile(file: CloudFile) {
   const mime = (file.mime_type || "").toLowerCase();
   if (mime.startsWith("image/")) return true;
-  return /\\.(png|jpe?g|jfif|webp|gif|bmp|svg|tiff?|heic|heif|avif)$/i.test(file.name);
+  return /\.(png|jpe?g|jfif|webp|gif|bmp|svg|tiff?|heic|heif|avif)$/i.test(file.name);
 }
 
 
