@@ -239,3 +239,38 @@ export async function POST(request: NextRequest) {
     return fail("تعذر الاتصال بقاعدة البيانات أثناء حفظ المحادثة.", 502);
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
+  const rateError = enforceRateLimit(request, "conversation-cloud-delete", 20);
+  if (rateError) return rateError;
+  const session = await authenticate(request);
+  if (!session) return fail("انتهت جلسة الحساب أو لم تسجّل الدخول.", 401);
+  let clientId = "";
+  try {
+    const raw = await request.text();
+    if (Buffer.byteLength(raw, "utf8") > 4000) return fail("حجم الطلب أكبر من الحد المسموح.", 413);
+    const body = JSON.parse(raw) as { id?: unknown };
+    if (typeof body.id !== "string" || !body.id || body.id.length > 120) return fail("معرّف المحادثة غير صالح.", 400);
+    clientId = body.id;
+  } catch { return fail("صيغة طلب الحذف غير صالحة.", 400); }
+  try {
+    const headers = authHeaders(session);
+    const lookup = new URL(`${session.base}/rest/v1/conversations`);
+    lookup.searchParams.set("select", "id");
+    lookup.searchParams.set("user_id", `eq.${session.userId}`);
+    lookup.searchParams.set("metadata->>client_id", `eq.${clientId}`);
+    lookup.searchParams.set("limit", "1");
+    const found = await fetch(lookup, { headers: { ...headers, Accept: "application/json" }, cache: "no-store" });
+    if (!found.ok) return fail("تعذر التحقق من ملكية المحادثة قبل حذفها.", 502);
+    const rows = await found.json() as { id: string }[];
+    if (!rows[0]) return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+    const remove = new URL(`${session.base}/rest/v1/conversations`);
+    remove.searchParams.set("id", `eq.${rows[0].id}`);
+    remove.searchParams.set("user_id", `eq.${session.userId}`);
+    const deleted = await fetch(remove, { method: "DELETE", headers: { ...headers, Prefer: "return=minimal" }, cache: "no-store" });
+    if (!deleted.ok) return fail("تعذر حذف المحادثة من السحابة.", 502);
+    return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch { return fail("حدث خطأ أثناء حذف المحادثة السحابية.", 502); }
+}
