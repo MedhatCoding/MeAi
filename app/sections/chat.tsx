@@ -69,7 +69,7 @@ export default function ChatSection({
           <div className="composer-toolbar">
             <div className="composer-tools">
               <button className="tool-btn" type="button" onClick={() => fileRef.current?.click()} aria-label="إرفاق ملف"><Paperclip size={19}/><span>إرفاق</span></button>
-              <span className="auto-mode-label"><Sparkles size={15}/> اختيار الأدوات تلقائيًا</span>
+              
             </div>
             <div className="send-group"><button className="send-btn" onClick={() => void handleSend(input, "chat")} disabled={(!input.trim() && pendingAttachments.length === 0) || busy} aria-label="إرسال"><Send size={19}/></button></div>
           </div>
