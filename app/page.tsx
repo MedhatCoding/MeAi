@@ -255,6 +255,7 @@ export default function Home() {
       setAccountUser(null);
       return false;
     }
+    let invalidRefreshSession = false;
     try {
       const response = await fetch("/api/account/auth/refresh", {
         method: "POST",
@@ -264,6 +265,7 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok || !data.session?.access_token || !data.session?.refresh_token) {
+        invalidRefreshSession = [400, 401, 403].includes(response.status);
         throw new Error(data.error || "انتهت جلسة الحساب؛ سجّل الدخول مرة أخرى.");
       }
       const session = data.session as {access_token:string;refresh_token:string;expires_in:number;user:{id:string;email:string}};
@@ -277,6 +279,17 @@ export default function Home() {
       setAccountExpiresAt(expiresAt);
       return true;
     } catch (error) {
+      if (invalidRefreshSession) {
+        localStorage.removeItem("meai-access-token");
+        localStorage.removeItem("meai-refresh-token");
+        localStorage.removeItem("meai-account-user");
+        localStorage.removeItem("meai-token-expires-at");
+        sessionStorage.removeItem("meai-access-token");
+        sessionStorage.removeItem("meai-account-user");
+        setAccountToken("");
+        setAccountUser(null);
+        setAccountExpiresAt(0);
+      }
       setCloudMemoryStatus(error instanceof Error ? error.message : "تعذر تجديد جلسة الحساب.");
       return false;
     }
@@ -712,8 +725,13 @@ ${data.error.name}: ${data.error.value}` : ""));
     if (!list?.length) return;
     const incoming = Array.from(list);
     const attachToChat = section === "chat";
-    if (!accountToken) {
-      setNotice("لرفع الملفات إلى التخزين السحابي، سجّل الدخول أولًا من الإعدادات. لم يتم حفظ أي ملف.");
+    let activeToken = accountToken || localStorage.getItem("meai-access-token") || sessionStorage.getItem("meai-access-token") || "";
+    if (!activeToken) {
+      const refreshed = await refreshAccountSession();
+      if (refreshed) activeToken = localStorage.getItem("meai-access-token") || "";
+    }
+    if (!activeToken) {
+      setNotice("جلسة الحساب غير متاحة حاليًا. سجّل الدخول من الإعدادات ثم أعد اختيار الملف.");
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
@@ -724,9 +742,15 @@ ${data.error.name}: ${data.error.value}` : ""));
     const skipped: string[] = [];
     let config: { uploadEndpoint?: string; anonKey?: string; userId?: string } | null = null;
     try {
-      const configResponse = await fetch("/api/account/storage", { headers: { Authorization: `Bearer ${accountToken}` }, cache: "no-store" });
+      let configResponse = await fetch("/api/account/storage", { headers: { Authorization: `Bearer ${activeToken}` }, cache: "no-store" });
+      if (configResponse.status === 401) {
+        const refreshed = await refreshAccountSession();
+        activeToken = refreshed ? (localStorage.getItem("meai-access-token") || "") : "";
+        if (activeToken) configResponse = await fetch("/api/account/storage", { headers: { Authorization: `Bearer ${activeToken}` }, cache: "no-store" });
+      }
       const configData = await configResponse.json();
       if (!configResponse.ok || !configData.uploadEndpoint || !configData.anonKey || !configData.userId) {
+        if (configResponse.status === 401) throw new Error("انتهت جلسة الدخول. سجّل الدخول مرة أخرى من الإعدادات.");
         throw new Error(configData.error || "تعذر تهيئة التخزين السحابي.");
       }
       const storageConfig = configData as { uploadEndpoint: string; anonKey: string; userId: string };
@@ -754,7 +778,7 @@ ${data.error.name}: ${data.error.value}` : ""));
               const upload = new tus.Upload(file, {
                 endpoint: storageConfig.uploadEndpoint,
                 retryDelays: [0, 3000, 5000, 10000, 20000],
-                headers: { authorization: `Bearer ${accountToken}`, apikey: storageConfig.anonKey },
+                headers: { authorization: `Bearer ${activeToken}`, apikey: storageConfig.anonKey },
                 uploadDataDuringCreation: true,
                 removeFingerprintOnSuccess: true,
                 chunkSize: 6 * 1024 * 1024,
@@ -780,7 +804,7 @@ ${data.error.name}: ${data.error.value}` : ""));
             const direct = await fetch(`${config!.uploadEndpoint!.replace("/upload/resumable", "/object")}/meai-files/${path.split("/").map(encodeURIComponent).join("/")}`, {
               method: "POST",
               headers: {
-                authorization: `Bearer ${accountToken}`,
+                authorization: `Bearer ${activeToken}`,
                 apikey: config!.anonKey!,
                 "Content-Type": mimeType,
                 "x-upsert": "false",
@@ -795,7 +819,7 @@ ${data.error.name}: ${data.error.value}` : ""));
 
           const register = await fetch("/api/account/storage", {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${activeToken}` },
             body: JSON.stringify({ action: "register", name: file.name, path, mimeType: mimeType, size: file.size }),
           });
           const registered = await register.json();
@@ -813,7 +837,7 @@ ${data.error.name}: ${data.error.value}` : ""));
             try {
               const extractionResponse = await fetch("/api/files/extract", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${accountToken}` },
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${activeToken}` },
                 body: JSON.stringify({ path, name: file.name, mimeType: mimeType, size: file.size }),
                 cache: "no-store",
               });
@@ -839,7 +863,7 @@ ${data.error.name}: ${data.error.value}` : ""));
         }
       }
 
-      await refreshCloudFiles(accountToken);
+      await refreshCloudFiles(activeToken);
       if (uploaded.length && !failed.length && !skipped.length) {
         setNotice(`تم رفع ${uploaded.length} ملف بنجاح إلى التخزين السحابي.`);
       } else {
@@ -852,7 +876,7 @@ ${data.error.name}: ${data.error.value}` : ""));
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "تعذر تهيئة رفع الملفات.");
-      await refreshCloudFiles(accountToken);
+      await refreshCloudFiles(activeToken);
     } finally {
       setCloudUploadProgress("");
       if (fileRef.current) fileRef.current.value = "";
