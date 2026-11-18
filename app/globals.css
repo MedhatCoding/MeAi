@@ -554,3 +554,22 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .chat-page .message-text { font-size: 18px !important; line-height: 2.1 !important; }
   .chat-page .message-meta b { font-size: 16px !important; }
 }
+
+
+/* In-app task creation dialog */
+.task-dialog-backdrop{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:18px;background:rgba(5,8,18,.68);backdrop-filter:blur(5px)}
+.task-dialog{width:min(100%,460px);padding:22px;border:1px solid var(--line);border-radius:20px;background:var(--panel);box-shadow:var(--shadow);color:var(--text)}
+.task-dialog-heading,.task-dialog-heading>div,.task-dialog-actions{display:flex;align-items:center}
+.task-dialog-heading{justify-content:space-between;gap:14px;margin-bottom:24px}
+.task-dialog-heading>div{gap:12px;min-width:0}
+.task-dialog-icon{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:13px;background:#a78bfa18;color:var(--accent)}
+.task-dialog-heading h2{font-size:17px;margin:0 0 4px}
+.task-dialog-heading p{font-size:11px;line-height:1.7;color:var(--muted);margin:0}
+.task-dialog-label{display:block;margin-bottom:9px;font-size:13px;font-weight:700}
+.task-dialog-input{display:block;width:100%;min-height:48px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--text);font-size:14px;outline:0}
+.task-dialog-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #a78bfa20}
+.task-dialog-input::placeholder{color:var(--muted)}
+.task-dialog-error{margin:8px 0 0;color:#ef7777;font-size:12px}
+.task-dialog-actions{justify-content:flex-start;gap:9px;margin-top:23px}
+.task-dialog-actions button{min-height:44px;padding-inline:17px;font-size:13px}
+@media(max-width:520px){.task-dialog{padding:18px;border-radius:17px}.task-dialog-heading h2{font-size:16px}.task-dialog-actions button{flex:1}}
