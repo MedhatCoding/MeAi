@@ -2,15 +2,8 @@
 
 import { useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { ArrowUp, Check, Copy, ExternalLink, Paperclip, Send, ShieldCheck, Sparkles, Code2, Search, Image as ImageIcon, Bot } from "lucide-react";
+import { Check, Copy, ExternalLink, Paperclip, Send, ShieldCheck, Sparkles } from "lucide-react";
 import type { ChatMode, Message } from "../lib/shared";
-
-const suggestions = [
-  { icon: Code2, title: "ساعدني في البرمجة", mode: "chat" as ChatMode, prompt: "ساعدني في مراجعة كود وتحسينه مع شرح التغييرات." },
-  { icon: Search, title: "ابحث على الويب", mode: "research" as ChatMode, prompt: "أحدث تطورات الذكاء الاصطناعي مفتوحة المصدر هذا الشهر" },
-  { icon: ImageIcon, title: "ارسم لي صورة", mode: "image" as ChatMode, prompt: "ارسم لي صورة: غروب الشمس فوق الكورنيش بأسلوب سينمائي دافئ" },
-  { icon: Bot, title: "نفّذ مهمة كاملة", mode: "agent" as ChatMode, prompt: "نفّذ مهمة كاملة: ابحث عن أفضل أدوات إدارة المهام مفتوحة المصدر وقارن بينها مع مصادر موثوقة." },
-];
 
 interface ChatSectionProps {
   messages: Message[];
@@ -21,8 +14,6 @@ interface ChatSectionProps {
   fileRef: RefObject<HTMLInputElement | null>;
   pendingAttachments: {name:string;content:string;mimeType:string;size:number;extractionError?:string}[];
   setPendingAttachments: Dispatch<SetStateAction<{name:string;content:string;mimeType:string;size:number;extractionError?:string}[]>>;
-  composerMode: ChatMode;
-  setComposerMode: Dispatch<SetStateAction<ChatMode>>;
   handleSend: (value?: string, mode?: ChatMode) => void | Promise<void>;
 }
 
@@ -35,7 +26,6 @@ export default function ChatSection({
   fileRef,
   pendingAttachments,
   setPendingAttachments,
-  setComposerMode,
   handleSend,
 }: ChatSectionProps) {
   const [copied, setCopied] = useState<number | null>(null);
@@ -47,7 +37,6 @@ export default function ChatSection({
           <div className="eyebrow"><span/> مساحة الذكاء الاصطناعي الكاملة بتاعتك</div>
           <h1>أهلًا بيك، <em>مدحت</em></h1>
           <p className="welcome-sub">كل حاجة في مكان واحد: محادثة، بحث بمصادر، توليد صور، ووكيل ينفذ مهام كاملة. من غير حدود اشتراكات.</p>
-          <div className="suggestion-grid">{suggestions.map(s => <button key={s.title} className="suggestion-card" onClick={() => { setComposerMode("chat"); void handleSend(s.prompt, "chat"); }}><div className="suggestion-icon"><s.icon size={19}/></div><span>{s.title}</span><ArrowUp size={15}/></button>)}</div>
         </div>
       ) : (
         <div className="conversation">
