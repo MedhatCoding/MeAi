@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const originError = rejectCrossOrigin(request);
   if (originError) return originError;
-  const rateError = enforceRateLimit(request, "conversation-cloud-write", 40);
+  const rateError = enforceRateLimit(request, "conversation-cloud-write", 100);
   if (rateError) return rateError;
   const session = await authenticate(request);
   if (!session) return fail("انتهت جلسة الحساب أو لم تسجّل الدخول.", 401);
