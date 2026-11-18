@@ -737,7 +737,14 @@ ${data.error.name}: ${data.error.value}` : ""));
         if (file.size > 50 * 1024 * 1024) { skipped.push(file.name + " (أكبر من 50MB)"); continue; }
         const safeName = file.name.replace(/[^\\p{L}\\p{N}._-]/gu, "_").slice(-180) || "file";
         const mimeType = file.type || inferMimeType(file.name);
-        const path = `${storageConfig.userId}/${crypto.randomUUID()}-${safeName}`;
+        // Keep the object path stable across retries so TUS resumes the same upload,
+        // rather than resuming an old object URL and registering a different random path.
+        const resumeKey = `meai-tus-path-v1:${storageConfig.userId}:${file.name}:${file.size}:${file.lastModified}`;
+        let path = localStorage.getItem(resumeKey) || "";
+        if (!path || !path.startsWith(`${storageConfig.userId}/`)) {
+          path = `${storageConfig.userId}/${crypto.randomUUID()}-${safeName}`;
+          localStorage.setItem(resumeKey, path);
+        }
         setCloudUploadProgress(`جاري رفع ${file.name} • 0% (من ${incoming.length})`);
 
         try {
@@ -793,6 +800,7 @@ ${data.error.name}: ${data.error.value}` : ""));
           });
           const registered = await register.json();
           if (!register.ok) throw new Error(registered.error || "تم رفع الملف لكن تعذر تسجيله في قائمة الملفات.");
+          localStorage.removeItem(resumeKey);
           uploaded.push(file.name);
           if (attachToChat) {
             let content = "";
