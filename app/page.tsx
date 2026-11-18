@@ -106,20 +106,72 @@ export default function Home() {
   const active = useMemo(() => nav.find(n => n.id === section)!, [section]);
 
   useEffect(() => {
-    try {
-      const token = localStorage.getItem("meai-access-token") || sessionStorage.getItem("meai-access-token") || "";
-      const user = localStorage.getItem("meai-account-user") || sessionStorage.getItem("meai-account-user");
-      const refreshToken = localStorage.getItem("meai-refresh-token") || "";
-      const expiresAt = Number(localStorage.getItem("meai-token-expires-at") || "0");
-      if (token && user) {
-        setAccountToken(token);
-        setAccountUser(JSON.parse(user) as {id:string;email:string});
-        setAccountExpiresAt(expiresAt);
-        localStorage.setItem("meai-access-token", token);
-        localStorage.setItem("meai-account-user", user);
-        if (!refreshToken) setCloudMemoryStatus("تم استعادة الجلسة القديمة. إذا انتهت صلاحيتها، سجّل الدخول مرة واحدة لتفعيل الحفظ المستمر.");
+    let cancelled = false;
+    async function restoreAccountSession() {
+      try {
+        const token = localStorage.getItem("meai-access-token") || sessionStorage.getItem("meai-access-token") || "";
+        const userRaw = localStorage.getItem("meai-account-user") || sessionStorage.getItem("meai-account-user");
+        const refreshToken = localStorage.getItem("meai-refresh-token") || "";
+        const expiresAt = Number(localStorage.getItem("meai-token-expires-at") || "0");
+        const user = userRaw ? JSON.parse(userRaw) as {id:string;email:string} : null;
+
+        // Refresh first on every app start. Supabase rotates refresh tokens, so
+        // the newest token must be persisted before protected requests begin.
+        if (refreshToken) {
+          const response = await fetch("/api/account/auth/refresh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+            cache: "no-store",
+          });
+          const data = await response.json().catch(() => ({}));
+          if (response.ok && data.session?.access_token && data.session?.refresh_token && data.session?.user?.id) {
+            const session = data.session as {access_token:string;refresh_token:string;expires_in:number;user:{id:string;email:string}};
+            const nextExpiry = Date.now() + Math.max(60, session.expires_in || 3600) * 1000;
+            localStorage.setItem("meai-access-token", session.access_token);
+            localStorage.setItem("meai-refresh-token", session.refresh_token);
+            localStorage.setItem("meai-account-user", JSON.stringify(session.user));
+            localStorage.setItem("meai-token-expires-at", String(nextExpiry));
+            if (!cancelled) {
+              setAccountToken(session.access_token);
+              setAccountUser(session.user);
+              setAccountExpiresAt(nextExpiry);
+              setCloudMemoryStatus("تم استعادة تسجيل دخولك تلقائيًا.");
+            }
+            return;
+          }
+          if ([400, 401, 403].includes(response.status)) {
+            localStorage.removeItem("meai-access-token");
+            localStorage.removeItem("meai-refresh-token");
+            localStorage.removeItem("meai-account-user");
+            localStorage.removeItem("meai-token-expires-at");
+          } else if (!response.ok) {
+            // A temporary network/server issue should not erase a still-valid session.
+            if (token && user && expiresAt > Date.now()) {
+              if (!cancelled) {
+                setAccountToken(token); setAccountUser(user); setAccountExpiresAt(expiresAt);
+                setCloudMemoryStatus("تعذر تحديث الجلسة الآن؛ سنحاول مرة أخرى تلقائيًا.");
+              }
+              return;
+            }
+          }
+        } else if (token && user && expiresAt > Date.now()) {
+          if (!cancelled) {
+            setAccountToken(token); setAccountUser(user); setAccountExpiresAt(expiresAt);
+            setCloudMemoryStatus("تم استعادة الجلسة. سجّل الدخول مرة واحدة لتفعيل التجديد التلقائي.");
+          }
+          return;
+        }
+        if (!cancelled) {
+          setAccountToken(""); setAccountUser(null); setAccountExpiresAt(0);
+          if (token || userRaw) setCloudMemoryStatus("انتهت جلسة تسجيل الدخول القديمة. سجّل الدخول مرة واحدة، وبعدها سيظل MeAI يتذكرك تلقائيًا.");
+        }
+      } catch {
+        // Keep the app usable if browser storage is unavailable.
       }
-    } catch {}
+    }
+    void restoreAccountSession();
+    return () => { cancelled = true; };
   }, []);
   useEffect(() => {
     const convs = readConversations();
