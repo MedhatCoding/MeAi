@@ -1,4 +1,4 @@
-const CACHE_NAME = "medhat-ai-shell-v3";
+const CACHE_NAME = "medhat-ai-shell-v4";
 const APP_SHELL = ["/", "/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -32,6 +32,8 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
+
+  if (url.pathname.startsWith("/_next/static/css/")) return;
 
   if (url.pathname.startsWith("/_next/static/") || url.pathname === "/icon.svg" || url.pathname === "/manifest.webmanifest") {
     event.respondWith(
