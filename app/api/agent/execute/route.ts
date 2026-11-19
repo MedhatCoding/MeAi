@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
   const modelConfig = getModelConfig();
   if (!modelConfig) return fail("خدمة الذكاء الاصطناعي غير مهيأة على الاستضافة.", 503);
-  const { endpoint, token, model } = modelConfig;
+  const { model } = modelConfig;
 
   const agentPlan = await planAgentTools({ task, documentCount: documents.length, modelConfig });
   // Explicit user intent is authoritative: a planner omission must not silently skip a requested tool.
