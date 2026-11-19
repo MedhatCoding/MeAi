@@ -250,8 +250,6 @@ export async function POST(request: NextRequest) {
   // Route image requests to the explicitly configured multimodal Gemini model.
   const activeModelConfig = visionImages.length ? visionConfig : getModelConfig();
   if (!activeModelConfig) return jsonError("خدمة الذكاء الاصطناعي غير مهيأة. أضف أسرار مزوّد الذكاء الاصطناعي إلى إعدادات الاستضافة.", 503);
-  const endpoint = activeModelConfig.endpoint;
-  const token = activeModelConfig.token;
   const model = activeModelConfig.model;
   let upstream: Response;
   try {
