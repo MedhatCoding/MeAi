@@ -1,4 +1,4 @@
-export type ModelConfig = { provider: "cloudflare" | "openai-compatible" | "gemini" | "groq"; endpoint: string; token: string; model: string };
+export type ModelConfig = { provider: "cloudflare" | "openai-compatible" | "gemini" | "groq" | "openrouter" | "deepseek"; endpoint: string; token: string; model: string };
 
 function configuredProviders(): Record<ModelConfig["provider"], ModelConfig | null> {
   const cloudflareId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -23,6 +23,20 @@ function configuredProviders(): Record<ModelConfig["provider"], ModelConfig | nu
     token: groqKey,
     model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
   } : null;
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  const openrouter: ModelConfig | null = openrouterKey ? {
+    provider: "openrouter",
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    token: openrouterKey,
+    model: process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b",
+  } : null;
+  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  const deepseek: ModelConfig | null = deepseekKey ? {
+    provider: "deepseek",
+    endpoint: "https://api.deepseek.com/chat/completions",
+    token: deepseekKey,
+    model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+  } : null;
   const base = process.env.OPENAI_BASE_URL;
   const key = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL;
@@ -32,12 +46,12 @@ function configuredProviders(): Record<ModelConfig["provider"], ModelConfig | nu
     token: key,
     model,
   } : null;
-  return { cloudflare, gemini, groq, "openai-compatible": compatible };
+  return { cloudflare, gemini, groq, openrouter, deepseek, "openai-compatible": compatible };
 }
 
 export function getConfiguredModelConfigs(): ModelConfig[] {
   const providers = configuredProviders();
-  const defaultOrder: ModelConfig["provider"][] = ["cloudflare", "gemini", "groq", "openai-compatible"];
+  const defaultOrder: ModelConfig["provider"][] = ["cloudflare", "gemini", "groq", "openrouter", "deepseek", "openai-compatible"];
   const preference = process.env.MEAI_MODEL_PROVIDER as ModelConfig["provider"] | undefined;
   const order = preference && defaultOrder.includes(preference)
     ? [preference, ...defaultOrder.filter(provider => provider !== preference)]
