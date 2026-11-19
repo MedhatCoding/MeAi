@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   const modelConfig = getModelConfig();
   if (!modelConfig) return error("خدمة الذكاء الاصطناعي غير مهيأة. أضف أسرار المزوّد في إعدادات الاستضافة.", 503);
-  const { endpoint, token, model } = modelConfig;
+  const { model } = modelConfig;
 
   const system = `أنت مخطط مهام لمساعد عام يدعم البحث والتجارب التقنية والأمن السيبراني. لا تدّع أنك نفّذت أي شيء. أعد JSON صالحًا فقط دون Markdown بالشكل:
 {"summary":"ملخص قصير بالعربية","steps":["خطوة واضحة","خطوة واضحة"],"limitations":["حد أو تحذير"]}
