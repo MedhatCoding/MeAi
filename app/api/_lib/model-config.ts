@@ -28,7 +28,7 @@ function configuredProviders(): Record<ModelConfig["provider"], ModelConfig | nu
   const model = process.env.OPENAI_MODEL;
   const compatible: ModelConfig | null = base && key && model ? {
     provider: "openai-compatible",
-    endpoint: base.replace(/\\/+$/, "") + "/chat/completions",
+        endpoint: base.replace(/\/+$/, "") + "/chat/completions",
     token: key,
     model,
   } : null;
