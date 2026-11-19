@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   try {
     response = await fetchModelWithFallback(modelConfig, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: task }], stream: false, temperature: 0.2 }),
       signal: request.signal, cache: "no-store",
     });
