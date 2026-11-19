@@ -220,7 +220,7 @@ print(f"Average: {average}")`;
         }
         const codePrompt = generatedCode ? null : await fetchModelWithFallback(modelConfig, {
           method: "POST",
-          headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model, temperature: 0, stream: false,
             messages: [
@@ -258,7 +258,7 @@ print(f"Average: {average}")`;
           if (attempt < 3) {
             const repair = await fetchModelWithFallback(modelConfig, {
               method: "POST",
-              headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 model, temperature: 0, stream: false,
                 messages: [
@@ -297,7 +297,7 @@ print(f"Average: {average}")`;
   try {
     const response = await fetchModelWithFallback(modelConfig, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: userContent }], stream: false, temperature: 0.25 }),
       cache: "no-store",
       signal: AbortSignal.timeout(55_000),
@@ -311,7 +311,7 @@ print(f"Average: {average}")`;
     try {
       const reviewResponse = await fetchModelWithFallback(modelConfig, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model,
           temperature: 0.15,
