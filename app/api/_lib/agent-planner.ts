@@ -1,3 +1,5 @@
+import { fetchModelWithFallback, type ModelConfig } from "./model-config";
+
 export type AgentToolName = "web_search" | "github_read" | "github_source_read" | "file_analysis" | "code_execution";
 
 export type AgentToolPlan = {
@@ -58,20 +60,17 @@ export function fallbackAgentToolPlan(task: string, documentCount: number): Agen
 export async function planAgentTools(input: {
   task: string;
   documentCount: number;
-  endpoint: string;
-  token: string;
-  model: string;
+  modelConfig: ModelConfig;
 }): Promise<AgentToolPlan> {
   const fallback = fallbackAgentToolPlan(input.task, input.documentCount);
   try {
-    const response = await fetch(input.endpoint, {
+    const response = await fetchModelWithFallback(input.modelConfig, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${input.token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: input.model,
+        model: input.modelConfig.model,
         temperature: 0,
         stream: false,
         messages: [
