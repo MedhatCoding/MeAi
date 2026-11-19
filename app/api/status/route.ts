@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     configured: Boolean(provider),
     provider,
     model: modelConfig?.model || null,
-    modelRouting: { selectedProvider: modelConfig?.provider || null, configuredProviders: configuredModelProviders, fallbackOrder: configuredModelProviders, automaticFallback: configuredModelProviders.length > 1, preference: process.env.MEAI_MODEL_PROVIDER || "cloudflare" },
+    modelRouting: { selectedProvider: modelConfig?.provider || null, configuredProviders: configuredModelProviders, fallbackOrder: configuredModelProviders, automaticFallback: configuredModelProviders.length > 1, preference: process.env.MEAI_MODEL_PROVIDER || "auto" },
     visionRouting: { selectedProvider: visionConfig?.provider || null, model: visionConfig?.model || null, configured: imageUnderstandingConfigured },
     features: {
       chat: Boolean(provider),
