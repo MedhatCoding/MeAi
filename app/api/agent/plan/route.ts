@@ -1,7 +1,7 @@
 import { rejectCrossOrigin, enforceRateLimit } from "../../_lib/guard";
 import { enforceApiAccess } from "../../_lib/api-access";
 import { NextRequest } from "next/server";
-import { getModelConfig } from "../../_lib/model-config";
+import { getModelConfig, fetchModelWithFallback } from "../../_lib/model-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 اكتب من 2 إلى 10 خطوات قابلة للتحقق، بالعربية، بحسب تعقيد المهمة دون حشو. عند المهام الأمنية، ضمّن خطوات إعداد مختبر محلي معزول، وتحديد نطاق الاختبار، واستخدام أهداف وبيانات تجريبية، والتحقق من النتائج. لا ترفض التخطيط لمهمة لمجرد أنها تتضمن نشرًا أو شراءً أو إرسال رسالة؛ وضّح أن هذه الإجراءات الخارجية تحتاج تأكيدًا صريحًا قبل تنفيذها. لا تقترح إتلاف بيانات أو تجاوز صلاحيات أو كشف أسرار. لا ترفض التخطيط لمجرد أن المهمة تتناول ثغرات أو برمجيات خبيثة أو اختبار اختراق؛ فرّق بين الدراسة والتحليل داخل المختبر وبين استهداف أنظمة حقيقية دون تصريح. إذا كانت المهمة غامضة فاذكر الافتراضات أو اطلب توضيحًا واحدًا ضروريًا. لا تقل إن التنفيذ غير متاح عمومًا؛ اذكر فقط القدرات المتاحة فعلًا في التطبيق وأي اعتماد خارجي ناقص.`;
   let response: Response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetchModelWithFallback(modelConfig, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: task }], stream: false, temperature: 0.2 }),
