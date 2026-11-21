@@ -294,9 +294,23 @@ export async function POST(request: NextRequest) {
       const targetedProductQueries = comparisonProducts.length ? buildProductEvidenceQueries(comparisonProducts) : [];
       const plannedQueries = isRolling24HourNewsRequest(latestUser) ? [latestUser] : targetedProductQueries.length ? targetedProductQueries.slice(0,12) : requestPlan.searchQueries.slice(0,2);
       const batches=await Promise.all(plannedQueries.map((query)=>searchWeb(query)));
-      const unique=new Map<string,WebSearchResult>();
-      for(const batch of batches)for(const result of batch.results){const key=result.url.replace(/[?#].*$/,"").replace(/\/$/,"").toLowerCase();if(!unique.has(key))unique.set(key,result);}
-      const search={results:[...unique.values()].slice(0,16)};
+      // Round-robin results across the product-specific query batches. A flat
+      // slice would let the first vendor's search results crowd out every other
+      // product before the evidence audit even sees them.
+      const selectedSearchResults: WebSearchResult[] = [];
+      const seenSearchUrls = new Set<string>();
+      for (let rank = 0; rank < 5 && selectedSearchResults.length < 16; rank++) {
+        for (const batch of batches) {
+          const result = batch.results[rank];
+          if (!result) continue;
+          const key = result.url.replace(/[?#].*$/, "").replace(/\/$/, "").toLowerCase();
+          if (seenSearchUrls.has(key)) continue;
+          seenSearchUrls.add(key);
+          selectedSearchResults.push(result);
+          if (selectedSearchResults.length >= 16) break;
+        }
+      }
+      const search={results:selectedSearchResults};
       systemMessage.content += "\n\nقواعد البحث الحي الإضافية: استخدم حتى 8 نتائج فقط بعد تقييم صلتها بالسؤال، ولا تملأ العدد بنتائج ضعيفة. امنح الأولوية لتطابق الموضوع وحداثة تاريخ النشر عندما يطلب المستخدم معلومات حديثة. نتائج مزودي البحث قد تتكرر؛ تعامل مع كل خبر أو صفحة مكررة كعنصر واحد، واستفد من اختلاف المصادر لإثراء التحقق لا لتكرار العنوان. لكل نتيجة رقم مرجعي ثابت [1]، [2]... حسب ترتيب الأدلة أدناه. يجب أن يظهر في الإجابة رابط مباشر قابل للفتح لكل خبر، وأن يتطابق رقم الاستشهاد مع المصدر الصحيح. في طلبات «اليوم» و«آخر 24 ساعة»، النتائج التي تصل إليك تكون قد اجتازت فلترة زمنية صارمة في الخادم؛ لا تضف إليها أخبارًا من الذاكرة أو من خارج النتائج، ولا توسّع النطاق الزمني. إذا لم تصل أي نتائج مؤرخة داخل النطاق، قل بوضوح: «لم أعثر على أخبار بتاريخ موثّق داخل الفترة المطلوبة»، ولا تعرض الأخبار القديمة على أنها حديثة ولا تملأ العدد بأخبار غير مؤرخة. لا تستنتج حداثة الخبر من ترتيب النتيجة أو من تاريخ اليوم وحده. لا تحوّل وصف محرك البحث لنوع المصدر إلى ضمان للمصداقية؛ قيّم ما يقدمه المصدر ووضّح طبيعته. إذا لم يكن هناك دليل كافٍ على الادعاء، قل ذلك صراحة.";
 
       const strict24h = isRolling24HourNewsRequest(latestUser);
