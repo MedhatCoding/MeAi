@@ -62,8 +62,9 @@ function classify(query: string): "news" | "web" | "academic" {
 function queryVariants(query: string, newsWindow: { start: Date; end: Date } | null = null) {
   const quoted = /[\u0600-\u06ff]/.test(query) ? query : '"' + query + '"';
   const comparison = /best|top|compare|comparison|recommend|review|افضل|أحسن|احسن|مقارنة|قارن|ترشيح|أنسب|انسب|ايهما|الفرق بين/i.test(query);
+  const targetedEvidenceQuery = /\b(?:official parental control features|independent review hands-on test)\b/i.test(query);
   const variants = [query, quoted];
-  if (comparison && !newsWindow) {
+  if (comparison && !newsWindow && !targetedEvidenceQuery) {
     // Search distinct evidence classes instead of repeatedly asking for generic lists:
     // vendor documentation, independent reviews, and platform/privacy limitations.
     variants.push(query + " official features Android iOS compatibility");
