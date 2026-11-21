@@ -110,7 +110,7 @@ function evidenceRootHost(value: string): string {
 function isOfficialProductEvidence(result: WebSearchResult, product: ComparisonProduct): boolean {
   let host = "";
   try { host = new URL(result.url).hostname.toLowerCase().replace(/^www\./, ""); } catch { return false; }
-  return result.sourceType === "official" || product.domains.some((domain) => host === domain || host.endsWith("." + domain));
+  return product.domains.some((domain) => host === domain || host.endsWith("." + domain));
 }
 
 function isIndependentReviewEvidence(result: WebSearchResult, product: ComparisonProduct): boolean {
