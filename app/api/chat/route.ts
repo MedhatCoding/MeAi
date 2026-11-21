@@ -278,16 +278,6 @@ export async function POST(request: NextRequest) {
 
       systemMessage.content += "\n[مراجعة جودة الأدلة الملزمة]: verdict="+audit.verdict+"؛ relevance="+audit.relevance+"؛ sourceDiversity="+audit.sourceDiversity+"؛ الملاحظات="+audit.notes+"؛ ادعاءات غير مدعومة="+audit.unsupportedClaims.join("؛ ")+"؛ تعارضات="+audit.conflicts.join("؛ ")+"؛ فحوص ناقصة="+audit.missingChecks.join("؛ ")+". إذا كانت النتيجة insufficient أو المصادر محدودة/ضعيفة فلا تعلن فائزًا قاطعًا ولا تعرض ادعاءات الأمان أو الخصوصية أو الامتثال كحقائق. ميّز المصادر الرسمية والتجارية والمستقلة، وصرّح بما لم يتم التحقق منه.";
       if (comparisonRequest) {
-        const rootHost = (url: string) => {
-          const labels = new URL(url).hostname.toLowerCase().replace(/^www\./, "").split(".");
-          return labels.length > 2 ? labels.slice(-2).join(".") : labels.join(".");
-        };
-        const distinctHosts = new Set(eligibleResults.map((item) => rootHost(item.url)));
-        // Official/vendor pages establish declared features, not independent quality.
-        // Count publishers and non-commercial third-party sources as independent evidence.
-        const independentHosts = new Set(eligibleResults
-          .filter((item) => item.sourceType === "publisher" || item.sourceType === "other")
-          .map((item) => rootHost(item.url)));
         if (eligibleResults.length === 0) {
           comparisonEvidenceGate = "لم أتمكن من إصدار مقارنة موثوقة أو اختيار تطبيق أفضل؛ الأدلة الحالية لا تحقق الحد الأدنى من التنوع والاستقلال أو لا تدعم الميزات بشكل كافٍ. بعض النتائج قد تكون من الشركات المقدمة للتطبيقات نفسها، وهي تصلح لإثبات ما تعلنه الشركة فقط، لا لإثبات جودة الميزة أو فعاليتها بصورة مستقلة. لذلك لن أنسب الميزات نفسها إلى التطبيقات المختلفة أو أعلن فائزًا. أحتاج إلى مصدر رسمي يثبت الميزات المعلنة لكل تطبيق، وإلى مراجعتين مستقلتين على الأقل لتقييم الجودة والقيود. صفحات الشركات لا تُحتسب ضمن المراجعات المستقلة.\n\nالمصادر التي عُثر عليها:\n" + eligibleResults.slice(0, 8).map((item, index) => (index + 1) + ". " + item.title + " — " + item.source + "\n" + item.url).join("\n\n");
         }
