@@ -201,6 +201,7 @@ const PUBLISHER_HOSTS = [
 ];
 
 const OFFICIAL_HOSTS = [
+  "play.google.com", "apps.apple.com",
   "openai.com", "anthropic.com", "blog.google", "deepmind.google", "nvidia.com",
   "microsoft.com", "apple.com", "cloudflare.com", "vercel.com", "github.com",
 ];
