@@ -263,11 +263,13 @@ export async function POST(request: NextRequest) {
           return labels.length > 2 ? labels.slice(-2).join(".") : labels.join(".");
         };
         const distinctHosts = new Set(eligibleResults.map((item) => rootHost(item.url)));
+        // Official/vendor pages establish declared features, not independent quality.
+        // Count publishers and non-commercial third-party sources as independent evidence.
         const independentHosts = new Set(eligibleResults
-          .filter((item) => item.sourceType === "publisher" || item.sourceType === "official" || item.sourceType === "other")
+          .filter((item) => item.sourceType === "publisher" || item.sourceType === "other")
           .map((item) => rootHost(item.url)));
         if (audit.verdict !== "sufficient" || audit.relevance !== "strong" || audit.sourceDiversity !== "good" || distinctHosts.size < 3 || independentHosts.size < 2) {
-          comparisonEvidenceGate = "لم أتمكن من إصدار مقارنة موثوقة أو اختيار تطبيق أفضل؛ الأدلة الحالية لا تحقق الحد الأدنى من التنوع والاستقلال أو لا تدعم الميزات بشكل كافٍ. بعض النتائج قد تكون من الشركات المقدمة للتطبيقات نفسها، وهي تصلح لإثبات ما تعلنه الشركة فقط، لا لإثبات جودة الميزة أو فعاليتها بصورة مستقلة. لذلك لن أنسب الميزات نفسها إلى التطبيقات المختلفة أو أعلن فائزًا. أحتاج إلى مصادر رسمية لكل تطبيق ومراجعتين مستقلتين على الأقل قبل المقارنة.\n\nالمصادر التي عُثر عليها:\n" + eligibleResults.slice(0, 8).map((item, index) => (index + 1) + ". " + item.title + " — " + item.source + "\n" + item.url).join("\n\n");
+          comparisonEvidenceGate = "لم أتمكن من إصدار مقارنة موثوقة أو اختيار تطبيق أفضل؛ الأدلة الحالية لا تحقق الحد الأدنى من التنوع والاستقلال أو لا تدعم الميزات بشكل كافٍ. بعض النتائج قد تكون من الشركات المقدمة للتطبيقات نفسها، وهي تصلح لإثبات ما تعلنه الشركة فقط، لا لإثبات جودة الميزة أو فعاليتها بصورة مستقلة. لذلك لن أنسب الميزات نفسها إلى التطبيقات المختلفة أو أعلن فائزًا. أحتاج إلى مصدر رسمي يثبت الميزات المعلنة لكل تطبيق، وإلى مراجعتين مستقلتين على الأقل لتقييم الجودة والقيود. صفحات الشركات لا تُحتسب ضمن المراجعات المستقلة.\n\nالمصادر التي عُثر عليها:\n" + eligibleResults.slice(0, 8).map((item, index) => (index + 1) + ". " + item.title + " — " + item.source + "\n" + item.url).join("\n\n");
         }
       }
       console.info("[meai-orchestrator]",JSON.stringify({event:"evidence_audit",resultCount:eligibleResults.length,readablePages:eligibleResults.filter((x)=>x.contentStatus==="read").length,verdict:audit.verdict,relevance:audit.relevance,sourceDiversity:audit.sourceDiversity}));
