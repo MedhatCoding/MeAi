@@ -512,7 +512,9 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
   }
   const rootHost = (url: string) => {
     const labels = new URL(url).hostname.toLowerCase().replace(/^www\./, "").split(".");
-    return labels.length > 2 ? labels.slice(-2).join(".") : labels.join(".");
+    const suffix2 = labels.slice(-2).join(".");
+    const multiPartSuffixes = new Set(["co.uk", "org.uk", "com.au", "net.au", "co.nz", "com.br", "com.eg", "co.in"]);
+    return labels.length >= 3 && multiPartSuffixes.has(suffix2) ? labels.slice(-3).join(".") : suffix2;
   };
   const selected: WebSearchResult[] = [];
   const hostCounts = new Map<string, number>();
