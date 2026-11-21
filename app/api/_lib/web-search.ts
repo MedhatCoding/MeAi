@@ -75,7 +75,7 @@ function queryVariants(query: string, newsWindow: { start: Date; end: Date } | n
     const afterDate = new Date(newsWindow.start.getTime() - 24 * 60 * 60_000).toISOString().slice(0, 10);
     variants.push(query + " after:" + afterDate);
   }
-  return [...new Set(variants.map((q) => q.trim()).filter((q) => q.length >= 2))].slice(0, comparison && !newsWindow ? 5 : 3);
+  return [...new Set(variants.map((q) => q.trim()).filter((q) => q.length >= 2))].slice(0, comparison && !newsWindow && !targetedEvidenceQuery ? 5 : newsWindow ? 3 : 2);
 }
 
 function isPublicHttpUrl(value: string) {
