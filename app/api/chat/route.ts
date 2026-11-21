@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
         return "[" + (index + 1) + "] العنوان الأصلي: " + result.title +
           "\nالمصدر: " + result.source +
           "\nمزوّد البحث: " + result.provider +
-          "\nنوع المصدر: " + (result.sourceType === "publisher" ? "ناشر صحفي/إخباري" : result.sourceType === "official" ? "مصدر رسمي" : result.sourceType === "social" ? "منصة أو منشور اجتماعي" : "موقع/مصدر آخر") +
+          "\nنوع المصدر: " + (result.sourceType === "publisher" ? "ناشر صحفي/إخباري" : result.sourceType === "official" ? "مصدر رسمي" : result.sourceType === "social" ? "منصة أو منشور اجتماعي" : result.sourceType === "commercial" ? "موقع تجاري/تابع لمقدم المنتج" : "موقع/مصدر آخر") +
           "\nتاريخ النشر كما أورده محرك البحث: " + (result.date || "غير متاح") +
           "\nمقتطف محرك البحث: " + (result.snippet || "غير متاح") +
           "\nحالة قراءة الصفحة: " + (result.contentStatus === "read" ? "تم استخراج نص الصفحة" : result.contentStatus === "unavailable" ? "تعذرت قراءة الصفحة" : "المتاح مقتطف محرك البحث فقط") +
@@ -241,6 +241,7 @@ export async function POST(request: NextRequest) {
       const audit=await verifyEvidence(modelConfig,latestUser,evidence,request.signal);
       const auditInstruction = "\n[مراجعة جودة الأدلة الملزمة]: verdict="+audit.verdict+"؛ relevance="+audit.relevance+"؛ sourceDiversity="+audit.sourceDiversity+"؛ الملاحظات="+audit.notes+"؛ ادعاءات غير مدعومة="+audit.unsupportedClaims.join("؛ ")+"؛ تعارضات="+audit.conflicts.join("؛ ")+"؛ فحوص ناقصة="+audit.missingChecks.join("؛ ")+". إذا كانت النتيجة insufficient أو المصادر محدودة/ضعيفة فلا تعلن فائزًا قاطعًا ولا تعرض ادعاءات الأمان أو الخصوصية أو الامتثال كحقائق. ميّز المصادر الرسمية والتجارية والمستقلة، وصرّح بما لم يتم التحقق منه.";
 
+      systemMessage.content += "\n[مراجعة جودة الأدلة الملزمة]: verdict="+audit.verdict+"؛ relevance="+audit.relevance+"؛ sourceDiversity="+audit.sourceDiversity+"؛ الملاحظات="+audit.notes+"؛ ادعاءات غير مدعومة="+audit.unsupportedClaims.join("؛ ")+"؛ تعارضات="+audit.conflicts.join("؛ ")+"؛ فحوص ناقصة="+audit.missingChecks.join("؛ ")+". إذا كانت النتيجة insufficient أو المصادر محدودة/ضعيفة فلا تعلن فائزًا قاطعًا ولا تعرض ادعاءات الأمان أو الخصوصية أو الامتثال كحقائق. ميّز المصادر الرسمية والتجارية والمستقلة، وصرّح بما لم يتم التحقق منه.";
       console.info("[meai-orchestrator]",JSON.stringify({event:"evidence_audit",resultCount:eligibleResults.length,readablePages:eligibleResults.filter((x)=>x.contentStatus==="read").length,verdict:audit.verdict,relevance:audit.relevance,sourceDiversity:audit.sourceDiversity}));
       groundedMessages=groundedMessages.map((message,index)=>index===groundedMessages.length-1
         ? {...message,content:message.content+"\n\n[خطة الطلب: "+requestPlan.intent+". سبب البحث: "+requestPlan.reason+".]\n[أدلة بحث فعلية؛ لا تضف حقائق غير مدعومة.]\n"+evidence+"\n\n[تدقيق الأدلة المستقل؛ استخدمه لكشف التعارضات والحدود ولا تعرضه حرفيًا]:\n"+JSON.stringify(audit)+auditInstruction}
