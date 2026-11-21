@@ -91,7 +91,7 @@ function getComparisonProducts(query: string): ComparisonProduct[] {
 
 function buildProductEvidenceQueries(products: ComparisonProduct[]): string[] {
   return products.flatMap((product) => [
-    product.name + " site: " + product.domains[0] + " official features Android iOS permissions privacy",
+    product.name + " site:" + product.domains[0] + " official features Android iOS permissions privacy",
     product.name + " independent hands-on review tested Android iOS limitations privacy",
   ]);
 }
