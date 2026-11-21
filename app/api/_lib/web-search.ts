@@ -4,7 +4,7 @@ export type WebSearchResult = {
   snippet: string;
   date: string | null;
   source: string;
-  sourceType: "publisher" | "official" | "social" | "other";
+  sourceType: "publisher" | "official" | "social" | "commercial" | "other";
   provider: "serper" | "brave" | "tavily" | "endless" | "langsearch";
   position: number | null;
   content?: string;
@@ -182,6 +182,8 @@ const SOCIAL_HOSTS = [
   "reddit.com", "threads.net", "t.me", "telegram.me", "discord.com",
 ];
 
+const COMMERCIAL_HOSTS = ["mspy.com", "eyezy.com", "flexispy.com", "parentaler.com", "airdroid.com"];
+
 const PUBLISHER_HOSTS = [
   "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theguardian.com",
   "nytimes.com", "washingtonpost.com", "cnbc.com", "bloomberg.com",
@@ -204,6 +206,7 @@ function classifySource(host: string): WebSearchResult["sourceType"] {
   if (hostMatches(normalized, SOCIAL_HOSTS)) return "social";
   if (hostMatches(normalized, OFFICIAL_HOSTS) || normalized.endsWith(".gov") || normalized.includes(".gov.") || normalized.endsWith(".edu")) return "official";
   if (hostMatches(normalized, PUBLISHER_HOSTS)) return "publisher";
+  if (hostMatches(normalized, COMMERCIAL_HOSTS)) return "commercial";
   return "other";
 }
 
@@ -416,14 +419,18 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     throw new Error("تعذر الاتصال بمزوّدي البحث المهيئين. حاول مرة أخرى بعد قليل.");
   }
   const seen = new Set<string>();
+  const seenTitles = new Set<string>();
   const candidates: WebSearchResult[] = [];
   for (const batch of batches) {
     batch.rows.forEach((row, index) => {
       const normalized = normalizeRow(row, batch.provider, index + 1);
       if (!normalized) return;
       const canonical = canonicalUrl(normalized.url);
-      if (seen.has(canonical)) return;
+      const titleKey = normalized.title.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      const host = new URL(canonical).hostname.replace(/^www\./, "");
+      if (seen.has(canonical) || (titleKey.length > 18 && seenTitles.has(host + "|" + titleKey))) return;
       seen.add(canonical);
+      if (titleKey.length > 18) seenTitles.add(host + "|" + titleKey);
       candidates.push(normalized);
     });
   }
@@ -475,7 +482,7 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
       })
     : candidates;
 
-  // Keep provider diversity, but sort time-bounded news newest-first.
+  // Diversify by root host and prevent commercial sources from dominating.
   const providerRank = new Map(providers.map((provider, index) => [provider.name, index]));
   if (newsWindow) {
     datedCandidates.sort((a, b) => Date.parse(b.date || "") - Date.parse(a.date || "") ||
@@ -484,7 +491,28 @@ export async function searchWeb(queryInput: string): Promise<WebSearchResponse> 
     datedCandidates.sort((a, b) => (a.position ?? 99) - (b.position ?? 99) ||
       (providerRank.get(a.provider) ?? 99) - (providerRank.get(b.provider) ?? 99));
   }
-  const selected = datedCandidates.slice(0, 12);
+  const rootHost = (url: string) => {
+    const labels = new URL(url).hostname.toLowerCase().replace(/^www\./, "").split(".");
+    return labels.length > 2 ? labels.slice(-2).join(".") : labels.join(".");
+  };
+  const selected: WebSearchResult[] = [];
+  const hostCounts = new Map<string, number>();
+  let commercialCount = 0;
+  for (const result of datedCandidates) {
+    const host = rootHost(result.url);
+    if ((hostCounts.get(host) || 0) >= 2) continue;
+    if (result.sourceType === "commercial" && commercialCount >= 3) continue;
+    selected.push(result);
+    hostCounts.set(host, (hostCounts.get(host) || 0) + 1);
+    if (result.sourceType === "commercial") commercialCount++;
+    if (selected.length >= 12) break;
+  }
+  if (selected.length < Math.min(8, datedCandidates.length)) {
+    for (const result of datedCandidates) {
+      if (selected.length >= 8) break;
+      if (!selected.some((item) => canonicalUrl(item.url) === canonicalUrl(result.url))) selected.push(result);
+    }
+  }
   const pageResults = await Promise.all(selected.filter((result) => !result.content).slice(0, 6).map(async (result) => {
     const page = pageMetadata.get(canonicalUrl(result.url)) || await readPage(result.url);
     return page?.text
