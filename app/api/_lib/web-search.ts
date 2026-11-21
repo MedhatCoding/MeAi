@@ -62,7 +62,7 @@ function classify(query: string): "news" | "web" | "academic" {
 function queryVariants(query: string, newsWindow: { start: Date; end: Date } | null = null) {
   const quoted = /[\u0600-\u06ff]/.test(query) ? query : '"' + query + '"';
   const comparison = /best|top|compare|comparison|recommend|review|افضل|أحسن|احسن|مقارنة|قارن|ترشيح|أنسب|انسب|ايهما|الفرق بين/i.test(query);
-  const targetedEvidenceQuery = /\b(?:official parental control features|independent review hands-on test)\b/i.test(query);
+  const targetedEvidenceQuery = /(?:official.*(?:features|documentation)|independent.*(?:review|test))/i.test(query);
   const variants = targetedEvidenceQuery
     ? [query, query.replace(/independent hands-on review/i, "independent review tested pros cons").replace(/official parental control features/i, "official support documentation feature availability")]
     : [query, quoted];
