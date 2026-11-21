@@ -63,7 +63,9 @@ function queryVariants(query: string, newsWindow: { start: Date; end: Date } | n
   const quoted = /[\u0600-\u06ff]/.test(query) ? query : '"' + query + '"';
   const comparison = /best|top|compare|comparison|recommend|review|افضل|أحسن|احسن|مقارنة|قارن|ترشيح|أنسب|انسب|ايهما|الفرق بين/i.test(query);
   const targetedEvidenceQuery = /\b(?:official parental control features|independent review hands-on test)\b/i.test(query);
-  const variants = [query, quoted];
+  const variants = targetedEvidenceQuery
+    ? [query, query.replace(/independent hands-on review/i, "independent review tested pros cons").replace(/official parental control features/i, "official support documentation feature availability")]
+    : [query, quoted];
   if (comparison && !newsWindow && !targetedEvidenceQuery) {
     // Search distinct evidence classes instead of repeatedly asking for generic lists:
     // vendor documentation, independent reviews, and platform/privacy limitations.
@@ -191,14 +193,21 @@ const SOCIAL_HOSTS = [
   "reddit.com", "threads.net", "t.me", "telegram.me", "discord.com",
 ];
 
-const COMMERCIAL_HOSTS = ["mspy.com", "eyezy.com", "flexispy.com", "parentaler.com", "airdroid.com"];
+const COMMERCIAL_HOSTS = [
+  "mspy.com", "eyezy.com", "flexispy.com", "parentaler.com", "airdroid.com",
+  "qustodio.com", "bark.us", "norton.com", "famisafe.wondershare.com",
+  "wondershare.com", "kidslox.com", "ourpact.com", "netnanny.com",
+];
 
 const PUBLISHER_HOSTS = [
   "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk", "theguardian.com",
   "nytimes.com", "washingtonpost.com", "cnbc.com", "bloomberg.com",
   "techcrunch.com", "theverge.com", "arstechnica.com", "technologyreview.com",
   "wired.com", "engadget.com", "aljazeera.net", "alarabiya.net", "youm7.com",
-  "masrawy.com",
+  "masrawy.com", "tomsguide.com", "techradar.com", "pcmag.com", "cnet.com",
+  "consumerreports.org", "thewirecutter.com", "nytimes.com", "androidauthority.com",
+  "makeuseof.com", "allaboutcookies.org", "qz.com", "security.org",
+  "commonsensemedia.org", "safewise.com", "internetmatters.org", "forbes.com",
 ];
 
 const OFFICIAL_HOSTS = [
